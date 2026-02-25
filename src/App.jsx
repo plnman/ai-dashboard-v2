@@ -18,8 +18,8 @@ const INIT = [
           { id: "t1", name: "딥러닝 경량화", progress: 75, delta: 10 },
           { id: "t2", name: "비전 검사 자동화", progress: 80, delta: 5 },
         ],
-        summary: "양자화 기법을 적용하여 정확도 손실을 2% 이내로 방어하며 추론 속도를 개선했습니다. 다음 주차에는 엣지 디바이스 환경 최적화 테스트를 진행할 예정입니다.",
-        aiReport: "양자화 단계에서 주목할 만한 진척이 관찰됩니다. 현재 기법은 성능 유지와 속도 향상의 균형을 잘 잡고 있습니다. 다음 주차에는 엣지 디바이스 이식 시 메모리 누수를 중점 모니터링하시길 권장합니다.",
+        summary: "양자화 기법을 적용하여 정확도 손실을 2% 이내로 방어하며 추론 속도를 개선했습니다.",
+        nextWeekPlan: "엣지 디바이스 환경 최적화 테스트를 진행할 예정입니다.",
         instructorMemo: "기법 적용이 매우 우수함",
       },
       {
@@ -878,16 +878,16 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant })
 /* ═══════════════════════════════════════════════════
    TAB 3 — 개인 대시보드 (관리자 + 참여자 통합)
 ═══════════════════════════════════════════════════ */
-function PersonalDashboard({ participant, companyName, schedule, isAdmin, onUpdate, onAddTask, onDeleteTask }) {
+function PersonalDashboard({ participant, companyName, schedule, isAdmin, isMine, onUpdate, onAddTask, onDeleteTask }) {
   const [showAddTask, setShowAddTask] = useState(false);
-  const [showAI, setShowAI] = useState(false);
   const [editSummary, setEditSummary] = useState(false);
   const [summaryDraft, setSummaryDraft] = useState(participant.summary);
+  const [planDraft, setPlanDraft] = useState(participant.nextWeekPlan || "");
   const [memoDraft, setMemoDraft] = useState(participant.instructorMemo);
 
   const updateProgress = (tid, val) =>
     onUpdate({ ...participant, tasks: participant.tasks.map((t) => t.id === tid ? { ...t, progress: Number(val) } : t) });
-  const saveSummary = () => { onUpdate({ ...participant, summary: summaryDraft }); setEditSummary(false); };
+  const saveSummary = () => { onUpdate({ ...participant, summary: summaryDraft, nextWeekPlan: planDraft }); setEditSummary(false); };
   const saveMemo = () => onUpdate({ ...participant, instructorMemo: memoDraft });
   const saveStatus = (s) => onUpdate({ ...participant, status: s });
 
@@ -933,11 +933,17 @@ function PersonalDashboard({ participant, companyName, schedule, isAdmin, onUpda
         <div className="text-right">
           <div className="text-5xl font-black">{actualPct}%</div>
           <div className="text-xs opacity-70">전체 진척도</div>
-          <select value={participant.status} onChange={(e) => saveStatus(e.target.value)}
-            className="mt-2 px-3 py-1 bg-white/20 text-white text-xs font-semibold rounded-full border border-white/30 outline-none cursor-pointer backdrop-blur">
-            <option value="정상" className="text-slate-800">🟢 정상 진행</option>
-            <option value="정체" className="text-slate-800">⚠️ 실적 정체</option>
-          </select>
+          {isMine ? (
+            <select value={participant.status} onChange={(e) => saveStatus(e.target.value)}
+              className="mt-2 px-3 py-1 bg-white/20 text-white text-xs font-semibold rounded-full border border-white/30 outline-none cursor-pointer backdrop-blur">
+              <option value="정상" className="text-slate-800">🟢 정상 진행</option>
+              <option value="정체" className="text-slate-800">⚠️ 실적 정체</option>
+            </select>
+          ) : (
+            <div className="mt-2 px-3 py-1 bg-white/20 text-white text-xs font-semibold rounded-full border border-white/30 inline-block backdrop-blur">
+              {participant.status === "정상" ? "🟢 정상 진행" : "⚠️ 실적 정체"}
+            </div>
+          )}
         </div>
       </div>
 
@@ -998,10 +1004,12 @@ function PersonalDashboard({ participant, companyName, schedule, isAdmin, onUpda
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-700">🛠️ 과제 현황</h3>
-          <button onClick={() => setShowAddTask(true)}
-            className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors">
-            ➕ 과제 추가
-          </button>
+          {isMine && (
+            <button onClick={() => setShowAddTask(true)}
+              className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors">
+              ➕ 과제 추가
+            </button>
+          )}
         </div>
         {participant.tasks.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-slate-400">등록된 과제가 없습니다.</p>
@@ -1014,15 +1022,19 @@ function PersonalDashboard({ participant, companyName, schedule, isAdmin, onUpda
                   <div className="flex items-center gap-2">
                     <DeltaEl d={t.delta} />
                     <span className="text-sm font-bold text-slate-700 w-8 text-right">{t.progress}%</span>
-                    <button onClick={() => onDeleteTask(participant.id, t.id)}
-                      className="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-rose-400 hover:bg-rose-50 rounded-lg transition-colors"
-                      title="과제 삭제">×</button>
+                    {isMine && (
+                      <button onClick={() => onDeleteTask(participant.id, t.id)}
+                        className="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-rose-400 hover:bg-rose-50 rounded-lg transition-colors"
+                        title="과제 삭제">×</button>
+                    )}
                   </div>
                 </div>
                 <PBar v={t.progress} />
-                <input type="range" min={0} max={100} value={t.progress}
-                  onChange={(e) => updateProgress(t.id, e.target.value)}
-                  className="w-full mt-2.5 accent-violet-500 cursor-pointer" />
+                {isMine && (
+                  <input type="range" min={0} max={100} value={t.progress}
+                    onChange={(e) => updateProgress(t.id, e.target.value)}
+                    className="w-full mt-2.5 accent-violet-500 cursor-pointer" />
+                )}
               </div>
             ))}
           </div>
@@ -1032,17 +1044,27 @@ function PersonalDashboard({ participant, companyName, schedule, isAdmin, onUpda
       {/* 금주 요약 보고 */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-700">📝 금주 요약 보고</h3>
-          <button onClick={() => { setSummaryDraft(participant.summary); setEditSummary(!editSummary); }}
-            className="text-xs text-violet-500 font-semibold hover:underline">
-            {editSummary ? "취소" : "✏️ 수정"}
-          </button>
+          <h3 className="text-sm font-bold text-slate-700">📝 금주 요약 및 차주 계획</h3>
+          {isMine && (
+            <button onClick={() => { setSummaryDraft(participant.summary); setPlanDraft(participant.nextWeekPlan || ""); setEditSummary(!editSummary); }}
+              className="text-xs text-violet-500 font-semibold hover:underline">
+              {editSummary ? "취소" : "✏️ 수정"}
+            </button>
+          )}
         </div>
         <div className="px-5 py-4">
           {editSummary ? (
-            <div className="space-y-3">
-              <textarea value={summaryDraft} onChange={(e) => setSummaryDraft(e.target.value)} rows={4}
-                className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-50 resize-none transition-all" />
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-500 block mb-1">금주 요약</label>
+                <textarea value={summaryDraft} onChange={(e) => setSummaryDraft(e.target.value)} rows={3}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-50 resize-none transition-all" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 block mb-1">차주 계획</label>
+                <textarea value={planDraft} onChange={(e) => setPlanDraft(e.target.value)} rows={3}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-50 resize-none transition-all" />
+              </div>
               <div className="flex justify-end">
                 <button onClick={saveSummary}
                   className="px-5 py-2 bg-emerald-500 text-white rounded-xl text-sm font-semibold hover:bg-emerald-600 transition-colors">
@@ -1051,7 +1073,16 @@ function PersonalDashboard({ participant, companyName, schedule, isAdmin, onUpda
               </div>
             </div>
           ) : (
-            <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 rounded-xl p-4">"{participant.summary}"</p>
+            <div className="space-y-4">
+              <div>
+                <span className="text-xs font-semibold text-slate-400 block mb-1.5">금주 요약</span>
+                <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 rounded-xl p-3">{participant.summary || "내용이 없습니다."}</p>
+              </div>
+              <div>
+                <span className="text-xs font-semibold text-slate-400 block mb-1.5">차주 계획</span>
+                <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 rounded-xl p-3">{participant.nextWeekPlan || "내용이 없습니다."}</p>
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -1076,26 +1107,6 @@ function PersonalDashboard({ participant, companyName, schedule, isAdmin, onUpda
             <p className="text-sm text-slate-600 bg-slate-50 rounded-xl p-3">{participant.instructorMemo || "—"}</p>
           )}
         </div>
-      </div>
-
-      {/* AI 레포트 */}
-      <div className="bg-gradient-to-br from-indigo-50 to-violet-50 rounded-2xl border border-violet-100 overflow-hidden">
-        <button onClick={() => setShowAI(!showAI)}
-          className="w-full px-5 py-4 flex items-center justify-between hover:bg-white/30 transition-colors">
-          <div className="flex items-center gap-2">
-            <span className="text-base">🤖</span>
-            <span className="text-sm font-bold text-violet-700">AI 주간 컨설팅 레포트</span>
-            <span className="text-xs bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full">강사 승인 완료</span>
-          </div>
-          <span className="text-violet-400 text-sm">{showAI ? "▲" : "▼"}</span>
-        </button>
-        {showAI && (
-          <div className="px-5 pb-5">
-            <div className="bg-white rounded-xl p-4 text-sm text-slate-600 leading-relaxed border border-violet-100">
-              {participant.aiReport}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -1167,7 +1178,7 @@ export default function App() {
         ...c,
         participants: [...c.participants, {
           id: id || uid(), name, dept, email: email || "", status: "정상",
-          tasks: [], summary: "", aiReport: "", instructorMemo: "",
+          tasks: [], summary: "", nextWeekPlan: "", instructorMemo: "",
         }],
       }
     ));
@@ -1184,6 +1195,11 @@ export default function App() {
   };
 
   const deleteParticipant = (cid, pid) => {
+    const targetComp = companies.find((c) => c.id === cid);
+    if (targetComp && targetComp.participants.length === 1 && targetComp.participants[0].id === pid) {
+      deleteCompany(cid);
+      return;
+    }
     updateCompanies((prev) =>
       prev.map((c) =>
         c.id !== cid ? c : { ...c, participants: c.participants.filter((p) => p.id !== pid) }
@@ -1335,14 +1351,13 @@ export default function App() {
           </div>
         )}
 
-        {/* 참여자 선택 칩 — 참여자 모드면 본인만 */}
+        {/* 참여자 선택 칩 — 참여자 모드면 본인 업체 구성원 모두 표시 */}
         {tab === "personal" && (
           <div className="flex gap-2 mb-5 flex-wrap">
-            {(isAdmin ? allParticipants : (myParticipant ? [myParticipant] : [])).map((p) => (
-              <button key={p.id} onClick={() => isAdmin && setParticipantId(p.id)}
+            {(isAdmin ? allParticipants : (myCompany ? myCompany.participants.map(p => ({ ...p, companyName: myCompany.name })) : [])).map((p) => (
+              <button key={p.id} onClick={() => setParticipantId(p.id)}
                 className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all
-                  ${participantId === p.id ? "bg-violet-500 text-white shadow-sm" : "bg-white text-slate-500 border border-slate-200 hover:border-violet-300"}
-                  ${!isAdmin ? "cursor-default" : ""}`}>
+                  ${participantId === p.id ? "bg-violet-500 text-white shadow-sm" : "bg-white text-slate-500 border border-slate-200 hover:border-violet-300 hover:bg-violet-50"}`}>
                 {p.name}<span className="opacity-60 text-xs ml-1">({p.companyName})</span>
               </button>
             ))}
@@ -1372,6 +1387,7 @@ export default function App() {
         {tab === "personal" && selectedParticipant && (
           <PersonalDashboard key={selectedParticipant.id} participant={selectedParticipant}
             companyName={selectedParticipantCompany} isAdmin={isAdmin}
+            isMine={isAdmin || myParticipantId === selectedParticipant.id}
             schedule={companies.find((c) => c.participants.some((p) => p.id === selectedParticipant.id))?.schedule}
             onUpdate={updateParticipant} onAddTask={addTask} onDeleteTask={deleteTask} />
         )}
