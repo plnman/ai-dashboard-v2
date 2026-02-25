@@ -5,8 +5,7 @@ import { doc, setDoc, onSnapshot } from "firebase/firestore";
 /* ═══════════════════════════════════════════════════
    초기 데이터
 ═══════════════════════════════════════════════════ */
-let _uid = 500;
-const uid = () => `u${++_uid}`;
+const uid = () => "u_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2, 8);
 
 const INIT = [
   {
