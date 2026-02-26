@@ -752,20 +752,19 @@ function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAdd
 /* ═══════════════════════════════════════════════════
    TAB 2 — 업체 허브  (레포트 버튼은 isAdmin일 때만)
 ═══════════════════════════════════════════════════ */
-function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant }) {
+function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, onAddChat }) {
   const [msg, setMsg] = useState("");
-  const [chat, setChat] = useState(company.chat);
   const [showReport, setShowReport] = useState(false);
   const [showAddParticipant, setShowAddParticipant] = useState(false);
   const chatEndRef = useRef(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chat]);
+  }, [company.chat]);
 
   const send = () => {
     if (!msg.trim()) return;
-    setChat((prev) => [...prev, { id: uid(), role: isAdmin ? "강사" : "참여자", text: msg }]);
+    onAddChat(company.id, { id: uid(), role: isAdmin ? "강사" : "참여자", text: msg });
     setMsg("");
   };
 
