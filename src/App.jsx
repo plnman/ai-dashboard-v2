@@ -32,7 +32,7 @@ const INIT = [
         instructorMemo: "일정 준수 우수",
       },
     ],
-    chat: [],
+    chat: [{ id: uid(), role: "강사", text: "소통창입니다." }],
     schedule: { startDate: "2026-01-06", kickoffDate: "2026-02-03", endDate: "2026-06-30" },
   },
   {
@@ -59,7 +59,7 @@ const INIT = [
         instructorMemo: "검증 데이터 다양성 확보 필요",
       },
     ],
-    chat: [],
+    chat: [{ id: uid(), role: "강사", text: "소통창입니다." }],
     schedule: { startDate: "2026-01-13", kickoffDate: "2026-02-10", endDate: "2026-07-07" },
   },
 ];
@@ -752,8 +752,10 @@ function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAdd
 /* ═══════════════════════════════════════════════════
    TAB 2 — 업체 허브  (레포트 버튼은 isAdmin일 때만)
 ═══════════════════════════════════════════════════ */
-function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, onAddChat }) {
+function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, onAddChat, onEditChat, onDeleteChat, currentUserId }) {
   const [msg, setMsg] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [editMsg, setEditMsg] = useState("");
   const [showReport, setShowReport] = useState(false);
   const [showAddParticipant, setShowAddParticipant] = useState(false);
   const chatEndRef = useRef(null);
@@ -764,8 +766,15 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
 
   const send = () => {
     if (!msg.trim()) return;
-    onAddChat(company.id, { id: uid(), role: isAdmin ? "강사" : "참여자", text: msg });
+    onAddChat(company.id, { id: uid(), role: isAdmin ? "강사" : "참여자", senderId: currentUserId, text: msg });
     setMsg("");
+  };
+
+  const saveEdit = () => {
+    if (!editMsg.trim()) return;
+    onEditChat(company.id, editingId, editMsg);
+    setEditingId(null);
+    setEditMsg("");
   };
 
   return (
@@ -838,25 +847,50 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
             <h3 className="text-sm font-bold text-slate-700">💬 실시간 소통 광장</h3>
           </div>
           <div className="flex-1 px-5 py-4 space-y-3 overflow-y-auto min-h-[180px] max-h-[240px]">
-            {company.chat.map((m, i) => (
-              <div key={i} className={`flex gap-2 ${m.role === "강사" || m.role === "나" ? "flex-row-reverse" : ""}`}>
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0
+            {company.chat.map((m, i) => {
+              const isMine = m.senderId === currentUserId || (!m.senderId && m.role === (isAdmin ? "강사" : "참여자"));
+              const canEdit = isAdmin || isMine;
+
+              return (
+                <div key={m.id || i} className={`flex gap-2 ${m.role === "강사" || m.role === "나" ? "flex-row-reverse" : ""}`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0
                   ${m.role === "강사" ? "bg-violet-100 text-violet-600"
-                    : m.role === "참여자" || m.role === "나" ? "bg-sky-100 text-sky-600"
-                      : "bg-slate-100 text-slate-500"}`}>
-                  {m.role[0]}
-                </div>
-                <div className={`max-w-[75%] flex flex-col gap-0.5 ${m.role === "강사" || m.role === "나" ? "items-end" : "items-start"}`}>
-                  <span className="text-xs text-slate-400">{m.role}</span>
-                  <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed
-                    ${m.role === "강사" || m.role === "나"
-                      ? "bg-sky-500 text-white rounded-tr-sm"
-                      : "bg-slate-100 text-slate-700 rounded-tl-sm"}`}>
-                    {m.text}
+                      : m.role === "참여자" || m.role === "나" ? "bg-sky-100 text-sky-600"
+                        : "bg-slate-100 text-slate-500"}`}>
+                    {m.role[0]}
+                  </div>
+                  <div className={`max-w-[75%] flex flex-col gap-0.5 ${m.role === "강사" || m.role === "나" ? "items-end" : "items-start"}`}>
+                    <span className="text-xs text-slate-400">{m.role}</span>
+                    {editingId === (m.id || i) ? (
+                      <div className="flex flex-col gap-1 items-end w-full">
+                        <textarea value={editMsg} onChange={e => setEditMsg(e.target.value)}
+                          className="w-full min-w-[200px] px-3 py-2 text-sm bg-white border border-violet-300 rounded-xl outline-none resize-none" rows={2} />
+                        <div className="flex gap-1 mt-1">
+                          <button onClick={() => setEditingId(null)} className="text-xs px-2 py-1 text-slate-400 hover:text-slate-600 font-semibold">취소</button>
+                          <button onClick={saveEdit} className="text-xs px-2 py-1 bg-violet-500 text-white rounded hover:bg-violet-600 font-semibold">저장</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className={`group relative px-3 py-2 rounded-2xl text-sm leading-relaxed
+                      ${m.role === "강사" || m.role === "나"
+                          ? "bg-sky-500 text-white rounded-tr-sm"
+                          : "bg-slate-100 text-slate-700 rounded-tl-sm"}`}>
+                        {m.text}
+
+                        {canEdit && (
+                          <div className={`absolute top-0 flex gap-1 bg-white/90 backdrop-blur shadow-sm border border-slate-100 rounded-lg px-2 py-1.5 
+                          opacity-0 group-hover:opacity-100 transition-opacity z-10
+                          ${m.role === "강사" || m.role === "나" ? "right-full mr-1 -mt-1" : "left-full ml-1 -mt-1"}`}>
+                            <button onClick={() => { setEditingId(m.id || i); setEditMsg(m.text); }} className="text-[11px] font-bold text-slate-500 hover:text-sky-500 whitespace-nowrap px-1">수정</button>
+                            <button onClick={() => onDeleteChat(company.id, m.id)} className="text-[11px] font-bold text-slate-500 hover:text-rose-500 whitespace-nowrap px-1 border-l pl-2 ml-1">삭제</button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
             <div ref={chatEndRef} />
           </div>
           <div className="px-4 py-3 border-t border-slate-100 flex gap-2">
@@ -1232,6 +1266,16 @@ export default function App() {
       c.id !== cid ? c : { ...c, chat: [...c.chat, message] }
     ));
 
+  const editChat = (cid, mid, newText) =>
+    updateCompanies((prev) => prev.map((c) =>
+      c.id !== cid ? c : { ...c, chat: c.chat.map(m => m.id === mid ? { ...m, text: newText } : m) }
+    ));
+
+  const deleteChat = (cid, mid) =>
+    updateCompanies((prev) => prev.map((c) =>
+      c.id !== cid ? c : { ...c, chat: c.chat.filter(m => m.id !== mid) }
+    ));
+
   const goToParticipant = (pid) => { setParticipantId(pid); setTab("personal"); };
   const goToCompany = (cid) => { setCompanyId(cid); setTab("company"); };
 
@@ -1374,7 +1418,9 @@ export default function App() {
         {tab === "company" && selectedCompany && (
           <CompanyHub key={selectedCompany.id} company={selectedCompany}
             isAdmin={isAdmin} onSelectParticipant={goToParticipant}
-            onAddParticipant={addParticipant} onAddChat={addChat} />
+            onAddParticipant={addParticipant} onAddChat={addChat}
+            onEditChat={editChat} onDeleteChat={deleteChat}
+            currentUserId={isAdmin ? "admin" : myParticipantId} />
         )}
         {tab === "company" && !selectedCompany && (
           <div className="text-center py-24 text-slate-400">
