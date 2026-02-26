@@ -32,7 +32,7 @@ const INIT = [
         instructorMemo: "일정 준수 우수",
       },
     ],
-    chat: [{ id: "m1", role: "강사", text: "파워넷사 팀, 이번 주 과제 진척도를 오늘 중으로 업데이트 부탁드립니다." }],
+    chat: [],
     schedule: { startDate: "2026-01-06", kickoffDate: "2026-02-03", endDate: "2026-06-30" },
   },
   {
@@ -59,8 +59,8 @@ const INIT = [
         instructorMemo: "검증 데이터 다양성 확보 필요",
       },
     ],
-    chat: [{ id: "m1", role: "강사", text: "대덕전자 팀, AOI 과제 병목 현상 관련 내일 미팅 잡겠습니다." }],
-    schedule: { startDate: "2026-01-13", kickoffDate: "2026-02-17", endDate: "2026-07-31" },
+    chat: [],
+    schedule: { startDate: "2026-01-13", kickoffDate: "2026-02-10", endDate: "2026-07-07" },
   },
 ];
 
