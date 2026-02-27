@@ -425,7 +425,20 @@ function LoginScreen({ companies, onLogin, onRegister }) {
     </div>
   );
 }
+// 동적 주차 계산 로직 (매주 월요일 자정 기준 증가)
+// 2026년 2월 23일(월요일)을 9주차 기준으로 삼음
+const getCurrentConsultingWeek = () => {
+  const baseDate = new Date("2026-02-23T00:00:00+09:00");
+  const baseWeekNumber = 9;
+  const now = new Date();
 
+  if (now < baseDate) return baseWeekNumber;
+
+  const diffTime = Math.abs(now - baseDate);
+  const diffWeeks = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 7));
+
+  return baseWeekNumber + diffWeeks;
+};
 
 function ReportModal({ company, onClose }) {
   const today = new Date().toLocaleDateString("ko-KR");
