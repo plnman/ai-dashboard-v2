@@ -431,6 +431,7 @@ function ReportModal({ company, onClose }) {
   const today = new Date().toLocaleDateString("ko-KR");
   const [targetWeek, setTargetWeek] = useState("9");
   const [isExporting, setIsExporting] = useState(false);
+  const [adminMemo, setAdminMemo] = useState("주요 일정 / 컨설팅 운영 방안 / 최근 벤치마크 순위 / 실습용 과제 샘플 소개");
 
   return (
     <Overlay onClose={onClose}>
@@ -452,7 +453,7 @@ function ReportModal({ company, onClose }) {
                   className="w-10 text-xs font-bold bg-transparent outline-none focus:text-indigo-600" min="1" max="52" />
               </div>
             </div>
-            <button onClick={() => publishReportToGoogleSheets([company], targetWeek, setIsExporting)}
+            <button onClick={() => publishReportToGoogleSheets([company], targetWeek, setIsExporting, adminMemo)}
               disabled={isExporting}
               className={`px-4 py-2 rounded-xl text-sm font-bold text-white transition-opacity flex items-center gap-1.5 shadow-sm
                 ${isExporting ? "bg-slate-400 cursor-not-allowed" : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90"}`}>
@@ -464,6 +465,17 @@ function ReportModal({ company, onClose }) {
         </div>
         {/* 바디 */}
         <div className="overflow-y-auto px-6 py-5 space-y-5">
+          {/* 주요 전달 내용 입력부 */}
+          <div className="bg-indigo-50/50 rounded-2xl p-5 border border-indigo-100">
+            <h4 className="text-sm font-bold text-indigo-800 mb-2">📢 주요 전달 내용 (공통)</h4>
+            <textarea
+              value={adminMemo}
+              onChange={e => setAdminMemo(e.target.value)}
+              className="w-full bg-white border border-indigo-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[80px]"
+              placeholder="이번 주 주요 일정, 전달 사항 등을 입력하세요. 레포트 최상단 '■ 주요 전달 내용'에 세팅됩니다."
+            />
+          </div>
+
           {company.participants.length === 0 ? (
             <p className="text-center py-10 text-slate-400 text-sm">등록된 참여자가 없습니다.</p>
           ) : company.participants.map((p) => (
@@ -529,9 +541,9 @@ function StatCard({ label, value, icon, gradient }) {
 /* ═══════════════════════════════════════════════════
    TAB 1 — 강사 관제 센터 (관리자 전용)
 ═══════════════════════════════════════════════════ */
-const GAS_URL = "https://script.google.com/macros/s/AKfycbxL4nP7tqh8NNkYQUvsCe5Fn-IPCIgLIpr7NNqzFbnl3wDTJ8pfraZeJznTGB9_vlI/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbyde7QfQavwgsYbfndlZglYdnXBNLkLd72KbHzFo57XHkrd4jfXwgk6CIGqyvMDrtk/exec";
 
-async function publishReportToGoogleSheets(companies, targetWeek, setExporting) {
+async function publishReportToGoogleSheets(companies, targetWeek, setExporting, adminMemo = "") {
   setExporting(true);
   try {
     // 1. 업체별 데이터 포맷 정제
@@ -539,8 +551,6 @@ async function publishReportToGoogleSheets(companies, targetWeek, setExporting) 
 
     companies.forEach(company => {
       let departmentStats = {};
-      let allSummaries = [];
-      let allPlans = [];
 
       company.participants.forEach(p => {
         // 부서별 카운트 산정
@@ -556,17 +566,61 @@ async function publishReportToGoogleSheets(companies, targetWeek, setExporting) 
             else departmentStats[dept].inProgress++;
           });
         }
-
-        // 금주 및 차주 요약 수집
-        if (p.summary) allSummaries.push(`[${p.name}] ${p.summary}`);
-        if (p.nextWeekPlan) allPlans.push(`[${p.name}] ${p.nextWeekPlan}`);
       });
+
+      // Build Summary (금주 내용)
+      let summaryText = `■ 주요 전달 내용\n`;
+      if (adminMemo && adminMemo.trim()) {
+        const lines = adminMemo.trim().split('\n');
+        lines.forEach(l => {
+          summaryText += `  - ${l}\n`;
+        });
+        summaryText += `\n`;
+      } else {
+        summaryText += `  - 입력된 전달 내용이 없습니다.\n\n`;
+      }
+
+      summaryText += `■ 컨설팅 개요\n`;
+      summaryText += `  - 프로젝트 시작 : ${company.schedule?.startDate || "미설정"}\n`;
+      summaryText += `  - KickOff : ${company.schedule?.kickoffDate || "미설정"}\n`;
+      summaryText += `  - 대시보드 링크 : https://ai-dashboard-v2.onrender.com/\n\n`;
+
+      summaryText += `■ 과제 현황\n`;
+      if (company.participants.length === 0) {
+        summaryText += `  - 등록된 참여자가 없습니다.\n`;
+      } else {
+        company.participants.forEach(p => {
+          summaryText += `  [${p.name} / ${p.dept}] 진도율: ${avgProgress(p)}% (${p.status})\n`;
+          p.tasks.forEach(t => {
+            summaryText += `    ㅇ 과제명: ${t.name} (진척도: ${t.progress}%, 변화: ${t.delta > 0 ? "+" : ""}${t.delta}%)\n`;
+          });
+          summaryText += `    ㅇ 금주 요약: ${p.summary || "없음"}\n`;
+          if (p.aiReport) {
+            summaryText += `    ㅇ AI 평가: ${p.aiReport.replace(/\n/g, "\n       ")}\n`;
+          }
+          if (p.instructorMemo) {
+            summaryText += `    ㅇ 강사 피드백: ${p.instructorMemo.replace(/\n/g, "\n       ")}\n`;
+          }
+          summaryText += `\n`;
+        });
+      }
+
+      // Build Plan (차주 내용)
+      let planText = `■ 차주 활동 계획\n`;
+      if (company.participants.length === 0) {
+        planText += `  - 등록된 참여자가 없습니다.\n`;
+      } else {
+        company.participants.forEach(p => {
+          planText += `  [${p.name}]\n`;
+          planText += `  - ${p.nextWeekPlan || "등록된 차주 계획이 없습니다."}\n\n`;
+        });
+      }
 
       reports.push({
         companyName: company.name,
         stats: departmentStats,
-        summary: allSummaries.length > 0 ? allSummaries.join("\n") : "작성된 내용이 없습니다.",
-        plan: allPlans.length > 0 ? allPlans.join("\n") : "작성된 내용이 없습니다."
+        summary: summaryText.trim(),
+        plan: planText.trim()
       });
     });
 
