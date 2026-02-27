@@ -429,63 +429,8 @@ function LoginScreen({ companies, onLogin, onRegister }) {
 
 function ReportModal({ company, onClose }) {
   const today = new Date().toLocaleDateString("ko-KR");
-
-  const exportWord = () => {
-    const rows = company.participants.map((p, i) => `
-<h2>${i + 1}. ${p.name}</h2>
-<div class='info-box'>
-  <b>부서:</b> ${p.dept} &nbsp;&nbsp;
-  <b>이메일:</b> ${p.email} &nbsp;&nbsp;
-  <b>전체 진척도:</b> ${avgProgress(p)}% &nbsp;&nbsp;
-  <b>상태:</b> <span class='${p.status === "정상" ? "ok" : "warn"}'>${p.status === "정상" ? "▶ 정상 진행" : "⚠ 실적 정체"}</span>
-</div>
-<h3>📋 과제 현황</h3>
-<table>
-  <tr><th>과제명</th><th>진척도</th><th>전주 대비</th></tr>
-  ${p.tasks.map(t => `<tr><td>${t.name}</td><td style='text-align:center'>${t.progress}%</td><td style='text-align:center'>${t.delta > 0 ? "+" : ""}${t.delta}%</td></tr>`).join("")}
-</table>
-<h3>📝 금주 요약 보고</h3><p>${p.summary}</p>
-<h3>🤖 AI 컨설팅 레포트</h3>
-<div class='ai-box'><p class='ai-label'>AI 전문 피드백</p><p>${p.aiReport}</p></div>
-<h3>✏️ 강사 피드백</h3><p>${p.instructorMemo}</p>
-<hr>`).join("");
-
-    const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'>
-<head><meta charset='utf-8'><style>
-  body{font-family:'맑은 고딕',sans-serif;font-size:11pt;margin:2cm;color:#1e293b;}
-  h1{color:#4F46E5;text-align:center;font-size:20pt;margin-bottom:4pt;}
-  .subtitle{text-align:center;color:#94a3b8;font-size:10pt;margin-bottom:24pt;}
-  h2{color:#1e293b;font-size:14pt;border-bottom:2px solid #e2e8f0;padding-bottom:6pt;margin-top:24pt;}
-  h3{color:#4b5563;font-size:11pt;margin:12pt 0 4pt;}
-  table{width:100%;border-collapse:collapse;margin-bottom:10pt;}
-  th,td{border:1px solid #e2e8f0;padding:7pt;font-size:10pt;}
-  th{background:#f8fafc;font-weight:bold;text-align:center;}
-  p{margin:4pt 0;line-height:1.7;}
-  .info-box{background:#f8fafc;padding:10pt;border-radius:4pt;margin-bottom:10pt;}
-  .ai-box{background:#eef2ff;padding:10pt;border-left:4px solid #6366f1;border-radius:0 6pt 6pt 0;margin:8pt 0;}
-  .ai-label{color:#4f46e5;font-weight:bold;font-size:10pt;margin-bottom:4pt;}
-  hr{border:none;border-top:1px solid #e2e8f0;margin:20pt 0;}
-  .ok{color:#059669;font-weight:bold;} .warn{color:#d97706;font-weight:bold;}
-</style></head>
-<body>
-<h1>🤖 ${company.name} AI 실습 주간 레포트</h1>
-<p class='subtitle'>발행일: ${today} &nbsp;|&nbsp; 참여자: ${company.participants.length}명</p>
-<hr>${rows}</body></html>`;
-
-    const blob = new Blob(["\ufeff", html], { type: "application/msword;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const dateStr = today.replace(/[\.\s]+/g, "");
-    const a = document.createElement("a");
-    a.style.display = "none";
-    a.href = url;
-    a.download = `${company.name}_AI레포트_${dateStr}.doc`;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 1000);
-  };
+  const [targetWeek, setTargetWeek] = useState("9");
+  const [isExporting, setIsExporting] = useState(false);
 
   return (
     <Overlay onClose={onClose}>
@@ -500,9 +445,18 @@ function ReportModal({ company, onClose }) {
             <p className="text-xs text-slate-400 mt-0.5">발행일: {today} · 참여자 {company.participants.length}명</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={exportWord}
-              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl text-sm font-bold hover:opacity-90 transition-opacity flex items-center gap-1.5 shadow-sm">
-              📄 Word 다운로드
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 h-full">
+                <span className="text-xs font-bold text-slate-500 mr-2">주차:</span>
+                <input type="number" value={targetWeek} onChange={e => setTargetWeek(e.target.value)}
+                  className="w-10 text-xs font-bold bg-transparent outline-none focus:text-indigo-600" min="1" max="52" />
+              </div>
+            </div>
+            <button onClick={() => publishReportToGoogleSheets([company], targetWeek, setIsExporting)}
+              disabled={isExporting}
+              className={`px-4 py-2 rounded-xl text-sm font-bold text-white transition-opacity flex items-center gap-1.5 shadow-sm
+                ${isExporting ? "bg-slate-400 cursor-not-allowed" : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90"}`}>
+              {isExporting ? "전송 중..." : "🚀 구글 시트 연동"}
             </button>
             <button onClick={onClose}
               className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors text-lg">✕</button>
