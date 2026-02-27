@@ -580,12 +580,14 @@ const GAS_URL = "https://script.google.com/macros/s/AKfycbxnwumPhVRIaKanAOnDlZSO
 async function publishReportToGoogleSheets(companies, targetWeek, setExporting) {
   setExporting(true);
   try {
-    // 1. 필요한 데이터 포맷으로 정제
-    let departmentStats = {};
-    let allSummaries = [];
-    let allPlans = [];
+    // 1. 업체별 데이터 포맷 정제
+    let reports = [];
 
     companies.forEach(company => {
+      let departmentStats = {};
+      let allSummaries = [];
+      let allPlans = [];
+
       company.participants.forEach(p => {
         // 부서별 카운트 산정
         const dept = p.dept || "기타";
@@ -593,30 +595,30 @@ async function publishReportToGoogleSheets(companies, targetWeek, setExporting) 
           departmentStats[dept] = { total: 0, completed: 0, inProgress: 0 };
         }
 
-        // 과제가 하나도 없으면 진행(미착수)로 간주하거나, 
-        // 과제가 있으면 평균 진척도를 보고 완료/진행 판별 (요구사항 상세가 없어 진척도 100%면 완료로 간주)
         if (p.tasks.length > 0) {
-          const avgProgress = Math.round(p.tasks.reduce((acc, t) => acc + t.progress, 0) / p.tasks.length);
           departmentStats[dept].total += p.tasks.length;
           p.tasks.forEach(t => {
             if (t.progress >= 100) departmentStats[dept].completed++;
             else departmentStats[dept].inProgress++;
           });
-        } else {
-          // 과제가 없는 경우 0,0,0
         }
 
         // 금주 및 차주 요약 수집
         if (p.summary) allSummaries.push(`[${p.name}] ${p.summary}`);
         if (p.nextWeekPlan) allPlans.push(`[${p.name}] ${p.nextWeekPlan}`);
       });
+
+      reports.push({
+        companyName: company.name,
+        stats: departmentStats,
+        summary: allSummaries.length > 0 ? allSummaries.join("\n") : "작성된 내용이 없습니다.",
+        plan: allPlans.length > 0 ? allPlans.join("\n") : "작성된 내용이 없습니다."
+      });
     });
 
     const payload = {
       week: targetWeek,
-      stats: departmentStats,
-      summary: allSummaries.join("\n"),
-      plan: allPlans.join("\n")
+      reports: reports
     };
 
     // 2. Google Apps Script로 전송
@@ -640,7 +642,7 @@ async function publishReportToGoogleSheets(companies, targetWeek, setExporting) 
 
 function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAddCompany, onDeleteCompany, onDeleteParticipant, onUpdateSchedule }) {
   const [showAdd, setShowAdd] = useState(false);
-  const [targetWeek, setTargetWeek] = useState("10");
+  const [targetWeek, setTargetWeek] = useState("9");
   const [isExporting, setIsExporting] = useState(false);
   const [delTarget, setDelTarget] = useState(null);
   const [schedTarget, setSchedTarget] = useState(null);
