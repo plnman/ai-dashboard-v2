@@ -429,7 +429,8 @@ function LoginScreen({ companies, onLogin, onRegister }) {
 
 function ReportModal({ company, onClose }) {
   const today = new Date().toLocaleDateString("ko-KR");
-  const [targetWeek, setTargetWeek] = useState("9");
+  const defaultWeek = getCurrentConsultingWeek().toString();
+  const [targetWeek, setTargetWeek] = useState(defaultWeek);
   const [isExporting, setIsExporting] = useState(false);
   const [adminMemo, setAdminMemo] = useState("주요 일정 / 컨설팅 운영 방안 / 최근 벤치마크 순위 / 실습용 과제 샘플 소개");
 
