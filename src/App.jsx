@@ -578,11 +578,11 @@ async function publishReportToGoogleSheets(companies, targetWeek, setExporting) 
     // 2. Google Apps Script로 전송
     const response = await fetch(GAS_URL, {
       method: "POST",
+      mode: "no-cors",
       body: JSON.stringify(payload),
       headers: {
         "Content-Type": "text/plain;charset=utf-8",
       },
-      // CORS 문제 우려시 mode: 'no-cors' 사용 (대신 response body 파싱 불가)
     });
 
     alert(`${targetWeek}주차 레포트가 구글 스프레드시트에 성공적으로 발행되었습니다!`);
