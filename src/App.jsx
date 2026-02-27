@@ -604,12 +604,14 @@ async function publishReportToGoogleSheets(companies, targetWeek, setExporting, 
       }
 
       // Build Plan (차주 내용)
-      let planText = ``;
+      let planText = `■ 차주 계획\n`;
       if (company.participants.length === 0) {
         planText += `  - 등록된 참여자가 없습니다.\n`;
       } else {
         company.participants.forEach(p => {
-          planText += `■ [${p.name}/${p.dept}] ${p.nextWeekPlan || "등록된 차주 계획이 없습니다."}\n\n`;
+          let planData = p.nextWeekPlan || "등록된 차주 계획이 없습니다.";
+          planData = planData.replace(/\n/g, ' '); // 줄바꿈을 공백으로 합쳐서 한 줄 요약으로 만듦
+          planText += `  - ${p.name}/${p.dept} : ${planData}\n`;
         });
       }
 
