@@ -575,37 +575,73 @@ function StatCard({ label, value, icon, gradient }) {
 /* ═══════════════════════════════════════════════════
    TAB 1 — 강사 관제 센터 (관리자 전용)
 ═══════════════════════════════════════════════════ */
-function exportAllWord(companies) {
-  const today = new Date().toLocaleDateString("ko-KR");
-  const avgP = (p) => p.tasks.length === 0 ? 0 : Math.round(p.tasks.reduce((s, t) => s + t.progress, 0) / p.tasks.length);
-  const sections = companies.map((company) => {
-    const rows = company.participants.map((p, i) => `
-<h2>${i + 1}. ${p.name} <small style='font-size:10pt;color:#64748b'>(${company.name})</small></h2>
-<div class='info-box'><b>부서:</b> ${p.dept} &nbsp;&nbsp;<b>전체 진척도:</b> ${avgP(p)}% &nbsp;&nbsp;<b>상태:</b> <span class='${p.status === "정상" ? "ok" : "warn"}'>${p.status === "정상" ? "▶ 정상 진행" : "⚠ 실적 정체"}</span></div>
-<h3>📋 과제 현황</h3><table><tr><th>과제명</th><th>진척도</th><th>전주 대비</th></tr>${p.tasks.map(t => `<tr><td>${t.name}</td><td style='text-align:center'>${t.progress}%</td><td style='text-align:center'>${t.delta > 0 ? "+" : ""}${t.delta}%</td></tr>`).join("")}</table>
-<h3>📝 금주 요약</h3><p>${p.summary}</p>
-<h3>🤖 AI 레포트</h3><div class='ai-box'><p class='ai-label'>AI 전문 피드백</p><p>${p.aiReport}</p></div>
-<h3>✏️ 강사 피드백</h3><p>${p.instructorMemo}</p><hr>`).join("");
-    return `<h1 style='color:#4F46E5;font-size:16pt;border-bottom:2px solid #e2e8f0'>🏢 ${company.name}</h1>${rows}`;
-  }).join("<div style='page-break-before:always'></div>");
-  const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'><head><meta charset='utf-8'><style>body{font-family:'맑은 고딕',sans-serif;font-size:11pt;margin:2cm;color:#1e293b;}h1{font-size:16pt;}h2{font-size:13pt;border-bottom:2px solid #e2e8f0;padding-bottom:5pt;margin-top:18pt;}h3{color:#4b5563;font-size:11pt;margin:10pt 0 4pt;}table{width:100%;border-collapse:collapse;margin-bottom:8pt;}th,td{border:1px solid #e2e8f0;padding:6pt;font-size:10pt;}th{background:#f8fafc;font-weight:bold;text-align:center;}p{margin:4pt 0;line-height:1.7;}.info-box{background:#f8fafc;padding:8pt;border-radius:4pt;margin-bottom:8pt;}.ai-box{background:#eef2ff;padding:10pt;border-left:4px solid #6366f1;border-radius:0 6pt 6pt 0;margin:8pt 0;}.ai-label{color:#4f46e5;font-weight:bold;font-size:10pt;margin-bottom:4pt;}hr{border:none;border-top:1px solid #e2e8f0;margin:16pt 0;}.ok{color:#059669;font-weight:bold;}.warn{color:#d97706;font-weight:bold;}</style></head><body><h1 style='text-align:center;color:#4F46E5;font-size:20pt'>🤖 전사 AI 실습 주간 레포트</h1><p style='text-align:center;color:#94a3b8;font-size:10pt'>발행일: ${today} | 총 업체: ${companies.length}개</p><hr>${sections}</body></html>`;
-  const blob = new Blob(["\ufeff", html], { type: "application/msword;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const dateStr = today.replace(/[\.\s]+/g, "");
-  const a = document.createElement("a");
-  a.style.display = "none";
-  a.href = url;
-  a.download = `전사_AI레포트_${dateStr}.doc`;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 1000);
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxnwumPhVRIaKanAOnDlZSOMNQ4VGO2EObcJ0oGgb3JFu8-MWMMIjkP5IStY62YQwQ/exec";
+
+async function publishReportToGoogleSheets(companies, targetWeek, setExporting) {
+  setExporting(true);
+  try {
+    // 1. 필요한 데이터 포맷으로 정제
+    let departmentStats = {};
+    let allSummaries = [];
+    let allPlans = [];
+
+    companies.forEach(company => {
+      company.participants.forEach(p => {
+        // 부서별 카운트 산정
+        const dept = p.dept || "기타";
+        if (!departmentStats[dept]) {
+          departmentStats[dept] = { total: 0, completed: 0, inProgress: 0 };
+        }
+
+        // 과제가 하나도 없으면 진행(미착수)로 간주하거나, 
+        // 과제가 있으면 평균 진척도를 보고 완료/진행 판별 (요구사항 상세가 없어 진척도 100%면 완료로 간주)
+        if (p.tasks.length > 0) {
+          const avgProgress = Math.round(p.tasks.reduce((acc, t) => acc + t.progress, 0) / p.tasks.length);
+          departmentStats[dept].total += p.tasks.length;
+          p.tasks.forEach(t => {
+            if (t.progress >= 100) departmentStats[dept].completed++;
+            else departmentStats[dept].inProgress++;
+          });
+        } else {
+          // 과제가 없는 경우 0,0,0
+        }
+
+        // 금주 및 차주 요약 수집
+        if (p.summary) allSummaries.push(`[${p.name}] ${p.summary}`);
+        if (p.nextWeekPlan) allPlans.push(`[${p.name}] ${p.nextWeekPlan}`);
+      });
+    });
+
+    const payload = {
+      week: targetWeek,
+      stats: departmentStats,
+      summary: allSummaries.join("\n"),
+      plan: allPlans.join("\n")
+    };
+
+    // 2. Google Apps Script로 전송
+    const response = await fetch(GAS_URL, {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      // CORS 문제 우려시 mode: 'no-cors' 사용 (대신 response body 파싱 불가)
+    });
+
+    alert(`${targetWeek}주차 레포트가 구글 스프레드시트에 성공적으로 발행되었습니다!`);
+  } catch (error) {
+    console.error("Export Error:", error);
+    alert("레포트 발행 중 오류가 발생했습니다. 자세한 내용은 콘솔을 확인해주세요.");
+  } finally {
+    setExporting(false);
+  }
 }
 
 function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAddCompany, onDeleteCompany, onDeleteParticipant, onUpdateSchedule }) {
   const [showAdd, setShowAdd] = useState(false);
+  const [targetWeek, setTargetWeek] = useState("10");
+  const [isExporting, setIsExporting] = useState(false);
   const [delTarget, setDelTarget] = useState(null);
   const [schedTarget, setSchedTarget] = useState(null);
   const all = companies.flatMap((c) => c.participants.map((p) => ({ ...p, companyName: c.name, companyId: c.id })));
@@ -673,9 +709,16 @@ function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAdd
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-700">🛰️ 전사 실습 현황 모니터링</h2>
           <div className="flex items-center gap-2">
-            <button onClick={() => exportAllWord(companies)}
-              className="px-4 py-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 text-white rounded-xl text-xs font-bold hover:opacity-90 transition-opacity flex items-center gap-1 shadow-sm">
-              📢 전사 레포트 일괄 발행
+            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 h-full">
+              <span className="text-xs font-bold text-slate-500 mr-2">주차:</span>
+              <input type="number" value={targetWeek} onChange={e => setTargetWeek(e.target.value)}
+                className="w-12 text-xs font-bold bg-transparent outline-none focus:text-indigo-600" min="1" max="52" />
+            </div>
+            <button onClick={() => publishReportToGoogleSheets(companies, targetWeek, setIsExporting)}
+              disabled={isExporting}
+              className={`px-4 py-1.5 rounded-xl text-xs font-bold text-white transition-opacity flex items-center gap-1 shadow-sm
+                ${isExporting ? "bg-slate-400 cursor-not-allowed" : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90"}`}>
+              {isExporting ? "전송 중..." : "🚀 구글 시트 연동"}
             </button>
             <button onClick={() => setShowAdd(true)}
               className="px-4 py-1.5 bg-violet-500 text-white rounded-xl text-xs font-bold hover:bg-violet-600 transition-colors flex items-center gap-1">
