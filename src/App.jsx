@@ -456,7 +456,7 @@ function ReportModal({ company, onClose }) {
               disabled={isExporting}
               className={`px-4 py-2 rounded-xl text-sm font-bold text-white transition-opacity flex items-center gap-1.5 shadow-sm
                 ${isExporting ? "bg-slate-400 cursor-not-allowed" : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90"}`}>
-              {isExporting ? "전송 중..." : "🚀 구글 시트 연동"}
+              {isExporting ? "전송 중..." : "📊 스프레드시트 발행"}
             </button>
             <button onClick={onClose}
               className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors text-lg">✕</button>
@@ -596,8 +596,6 @@ async function publishReportToGoogleSheets(companies, targetWeek, setExporting) 
 
 function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAddCompany, onDeleteCompany, onDeleteParticipant, onUpdateSchedule }) {
   const [showAdd, setShowAdd] = useState(false);
-  const [targetWeek, setTargetWeek] = useState("9");
-  const [isExporting, setIsExporting] = useState(false);
   const [delTarget, setDelTarget] = useState(null);
   const [schedTarget, setSchedTarget] = useState(null);
   const all = companies.flatMap((c) => c.participants.map((p) => ({ ...p, companyName: c.name, companyId: c.id })));
@@ -665,17 +663,6 @@ function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAdd
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-700">🛰️ 전사 실습 현황 모니터링</h2>
           <div className="flex items-center gap-2">
-            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 h-full">
-              <span className="text-xs font-bold text-slate-500 mr-2">주차:</span>
-              <input type="number" value={targetWeek} onChange={e => setTargetWeek(e.target.value)}
-                className="w-12 text-xs font-bold bg-transparent outline-none focus:text-indigo-600" min="1" max="52" />
-            </div>
-            <button onClick={() => publishReportToGoogleSheets(companies, targetWeek, setIsExporting)}
-              disabled={isExporting}
-              className={`px-4 py-1.5 rounded-xl text-xs font-bold text-white transition-opacity flex items-center gap-1 shadow-sm
-                ${isExporting ? "bg-slate-400 cursor-not-allowed" : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90"}`}>
-              {isExporting ? "전송 중..." : "🚀 구글 시트 연동"}
-            </button>
             <button onClick={() => setShowAdd(true)}
               className="px-4 py-1.5 bg-violet-500 text-white rounded-xl text-xs font-bold hover:bg-violet-600 transition-colors flex items-center gap-1">
               ➕ 업체 추가
