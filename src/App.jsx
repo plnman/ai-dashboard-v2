@@ -569,7 +569,7 @@ async function publishReportToGoogleSheets(companies, targetWeek, setExporting, 
       });
 
       // Build Summary (금주 내용)
-      let summaryText = `■ 주요 전달 내용\n`;
+      let summaryText = `■ 주요전달 내용\n`;
       if (adminMemo && adminMemo.trim()) {
         const lines = adminMemo.trim().split('\n');
         lines.forEach(l => {
@@ -580,41 +580,39 @@ async function publishReportToGoogleSheets(companies, targetWeek, setExporting, 
         summaryText += `  - 입력된 전달 내용이 없습니다.\n\n`;
       }
 
-      summaryText += `■ 컨설팅 개요\n`;
-      summaryText += `  - 프로젝트 시작 : ${company.schedule?.startDate || "미설정"}\n`;
-      summaryText += `  - KickOff : ${company.schedule?.kickoffDate || "미설정"}\n`;
-      summaryText += `  - 대시보드 링크 : https://ai-dashboard-v2.onrender.com/\n\n`;
-
-      summaryText += `■ 과제 현황\n`;
+      summaryText += `■ 금주 과제 현황\n`;
       if (company.participants.length === 0) {
         summaryText += `  - 등록된 참여자가 없습니다.\n`;
       } else {
         company.participants.forEach(p => {
-          summaryText += `  [${p.name} / ${p.dept}] 진도율: ${avgProgress(p)}% (${p.status})\n`;
-          p.tasks.forEach(t => {
-            summaryText += `    ㅇ 과제명: ${t.name} (진척도: ${t.progress}%, 변화: ${t.delta > 0 ? "+" : ""}${t.delta}%)\n`;
-          });
-          summaryText += `    ㅇ 금주 요약: ${p.summary || "없음"}\n`;
-          if (p.aiReport) {
-            summaryText += `    ㅇ AI 평가: ${p.aiReport.replace(/\n/g, "\n       ")}\n`;
-          }
-          if (p.instructorMemo) {
-            summaryText += `    ㅇ 강사 피드백: ${p.instructorMemo.replace(/\n/g, "\n       ")}\n`;
+          summaryText += `       - [${p.name}/${p.dept}] 진도율: ${avgProgress(p)}% (${p.status})\n`;
+          if (p.summary) {
+            p.summary.split('\n').forEach((line, idx) => {
+              if (line.trim() !== "") {
+                if (idx === 0) {
+                  summaryText += `        . ${line}\n`;
+                } else {
+                  summaryText += `          ${line}\n`;
+                }
+              }
+            });
+          } else {
+            summaryText += `        . 작성된 금주 요약이 없습니다.\n`;
           }
           summaryText += `\n`;
         });
       }
 
       // Build Plan (차주 내용)
-      let planText = `■ 차주 활동 계획\n`;
+      let planText = ``;
       if (company.participants.length === 0) {
         planText += `  - 등록된 참여자가 없습니다.\n`;
       } else {
         company.participants.forEach(p => {
-          planText += `  [${p.name}]\n`;
-          planText += `  - ${p.nextWeekPlan || "등록된 차주 계획이 없습니다."}\n\n`;
+          planText += `■ [${p.name}/${p.dept}] ${p.nextWeekPlan || "등록된 차주 계획이 없습니다."}\n\n`;
         });
       }
+
 
       reports.push({
         companyName: company.name,
