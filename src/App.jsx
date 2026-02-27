@@ -611,7 +611,7 @@ async function publishReportToGoogleSheets(companies, targetWeek, setExporting, 
         company.participants.forEach(p => {
           let planData = p.nextWeekPlan || "등록된 차주 계획이 없습니다.";
           planData = planData.replace(/\n/g, ' '); // 줄바꿈을 공백으로 합쳐서 한 줄 요약으로 만듦
-          planText += `  - ${p.name}/${p.dept} : ${planData}\n`;
+          planText += `  -[${p.name}/${p.dept}] ${planData}\n`;
         });
       }
 
