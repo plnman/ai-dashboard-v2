@@ -941,7 +941,7 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
 
       <div className="grid grid-cols-2 gap-5">
         {/* 참여자 목록 */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col h-[600px] overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
             <h3 className="text-sm font-bold text-slate-700">👥 참여자 현황</h3>
             <button onClick={() => setShowAddParticipant(true)}
@@ -949,7 +949,7 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
               👤 참여자 등록
             </button>
           </div>
-          <div className="flex-1 pb-4">
+          <div className="flex-1 pb-4 overflow-y-auto">
             {company.participants.length === 0 ? (
               <p className="px-5 py-20 text-center text-sm text-slate-400">등록된 참여자가 없습니다.</p>
             ) : (
