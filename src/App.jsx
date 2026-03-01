@@ -662,10 +662,46 @@ async function publishReportToGoogleSheets(companies, targetWeek, setExporting, 
   }
 }
 
+async function updateParticipantsToGoogleSheets(companies, setExporting) {
+  setExporting(true);
+  try {
+    const participants = companies.flatMap(c =>
+      c.participants.map(p => ({
+        company: c.name,
+        dept: p.dept || "",
+        name: p.name || "",
+        email: p.email || ""
+      }))
+    );
+
+    const payload = {
+      action: "updateParticipants",
+      participants: participants
+    };
+
+    const response = await fetch(GAS_URL, {
+      method: "POST",
+      mode: "no-cors",
+      body: JSON.stringify(payload),
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+    });
+
+    alert(`참여자 명단이 구글 스프레드시트 '참여자' 시트에 성공적으로 업데이트되었습니다!`);
+  } catch (error) {
+    console.error("Export Error:", error);
+    alert("참여자 업데이트 중 오류가 발생했습니다. 자세한 내용은 콘솔을 확인해주세요.");
+  } finally {
+    setExporting(false);
+  }
+}
+
 function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAddCompany, onDeleteCompany, onDeleteParticipant, onUpdateSchedule }) {
   const [showAdd, setShowAdd] = useState(false);
   const [delTarget, setDelTarget] = useState(null);
   const [schedTarget, setSchedTarget] = useState(null);
+  const [isExportingParticipants, setIsExportingParticipants] = useState(false);
   const all = companies.flatMap((c) => c.participants.map((p) => ({ ...p, companyName: c.name, companyId: c.id })));
   const totalAvg = all.length ? Math.round(all.reduce((s, p) => s + avgProgress(p), 0) / all.length) : 0;
 
@@ -731,6 +767,13 @@ function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAdd
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-700">🛰️ 전사 실습 현황 모니터링</h2>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => updateParticipantsToGoogleSheets(companies, setIsExportingParticipants)}
+              disabled={isExportingParticipants}
+              className={`px-4 py-1.5 rounded-xl text-xs font-bold text-white transition-opacity flex items-center gap-1 shadow-sm
+                ${isExportingParticipants ? "bg-slate-400 cursor-not-allowed" : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90"}`}>
+              {isExportingParticipants ? "업데이트 중..." : "👥 참여자 업데이트"}
+            </button>
             <button onClick={() => setShowAdd(true)}
               className="px-4 py-1.5 bg-violet-500 text-white rounded-xl text-xs font-bold hover:bg-violet-600 transition-colors flex items-center gap-1">
               ➕ 업체 추가
