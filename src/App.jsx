@@ -941,46 +941,67 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
 
       <div className="grid grid-cols-2 gap-5">
         {/* 참여자 목록 */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col h-[500px]">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
             <h3 className="text-sm font-bold text-slate-700">👥 참여자 현황</h3>
             <button onClick={() => setShowAddParticipant(true)}
               className="px-3 py-1.5 bg-sky-50 text-sky-600 rounded-lg text-xs font-bold hover:bg-sky-100 transition-colors flex items-center gap-1">
               👤 참여자 등록
             </button>
           </div>
-          <div className="divide-y divide-slate-50">
-            {company.participants.map((p) => (
-              <div key={p.id} className="px-5 py-4 hover:bg-slate-50 transition-colors">
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <span className="font-semibold text-slate-700 text-sm">{p.name}</span>
-                    <span className="ml-2 text-xs text-slate-400">{p.dept}</span>
-                  </div>
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${sBadge(p.status)}`}>
-                    {p.status === "정상" ? "🟢" : "⚠️"} {p.status}
-                  </span>
-                </div>
-                <PBar v={avgProgress(p)} />
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-xs text-slate-400">{p.tasks.length}개 과제 · {avgProgress(p)}% 완료</span>
-                  <button onClick={() => onSelectParticipant(p.id)}
-                    className="text-xs text-violet-600 font-semibold hover:underline">상세보기 →</button>
-                </div>
-              </div>
-            ))}
-            {company.participants.length === 0 && (
-              <p className="px-5 py-10 text-center text-sm text-slate-400">등록된 참여자가 없습니다.</p>
+          <div className="overflow-y-auto flex-1 pb-4">
+            {company.participants.length === 0 ? (
+              <p className="px-5 py-20 text-center text-sm text-slate-400">등록된 참여자가 없습니다.</p>
+            ) : (
+              Object.entries(
+                company.participants.reduce((acc, p) => {
+                  const dept = p.dept || '소속 없음';
+                  if (!acc[dept]) acc[dept] = [];
+                  acc[dept].push(p);
+                  return acc;
+                }, {})
+              ).sort(([deptA], [deptB]) => deptA.localeCompare(deptB))
+                .map(([dept, members]) => {
+                  members.sort((a, b) => a.name.localeCompare(b.name));
+                  return (
+                    <div key={dept} className="mb-2">
+                      <div className="px-5 py-2.5 bg-slate-50 border-y border-slate-100 sticky top-0 z-10">
+                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">{dept} ({members.length})</h4>
+                      </div>
+                      <div className="divide-y divide-slate-50">
+                        {members.map((p) => (
+                          <div key={p.id} className="px-5 py-4 hover:bg-slate-50 transition-colors">
+                            <div className="flex items-center justify-between mb-2">
+                              <div>
+                                <span className="font-semibold text-slate-700 text-sm">{p.name}</span>
+                                <span className="ml-2 text-xs text-slate-400">{p.dept}</span>
+                              </div>
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${sBadge(p.status)}`}>
+                                {p.status === "정상" ? "🟢" : "⚠️"} {p.status}
+                              </span>
+                            </div>
+                            <PBar v={avgProgress(p)} />
+                            <div className="flex items-center justify-between mt-2">
+                              <span className="text-xs text-slate-400">{p.tasks.length}개 과제 · {avgProgress(p)}% 완료</span>
+                              <button onClick={() => onSelectParticipant(p.id)}
+                                className="text-xs text-violet-600 font-semibold hover:underline">상세보기 →</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
             )}
           </div>
         </div>
 
         {/* 실시간 채팅 */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col h-[500px] overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 shrink-0">
             <h3 className="text-sm font-bold text-slate-700">💬 실시간 소통 광장</h3>
           </div>
-          <div className="flex-1 px-5 py-4 space-y-3 overflow-y-auto min-h-[180px] max-h-[240px]">
+          <div className="flex-1 px-5 py-4 space-y-3 overflow-y-auto min-h-[180px]">
             {company.chat.map((m, i) => {
               const isMine = m.senderId === currentUserId || (!m.senderId && m.role === (isAdmin ? "강사" : "참여자"));
               const canEdit = isAdmin || isMine;
