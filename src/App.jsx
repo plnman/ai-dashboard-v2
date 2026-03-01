@@ -32,7 +32,7 @@ const INIT = [
         instructorMemo: "일정 준수 우수",
       },
     ],
-    chat: [{ id: uid(), role: "강사", text: "소통창입니다." }],
+    chat: [{ id: uid(), role: "강사", text: "소통창입니다.", createdAt: new Date().toISOString() }],
     schedule: { startDate: "2026-01-06", kickoffDate: "2026-02-03", endDate: "2026-06-30" },
   },
   {
@@ -59,7 +59,7 @@ const INIT = [
         instructorMemo: "검증 데이터 다양성 확보 필요",
       },
     ],
-    chat: [{ id: uid(), role: "강사", text: "소통창입니다." }],
+    chat: [{ id: uid(), role: "강사", text: "소통창입니다.", createdAt: new Date().toISOString() }],
     schedule: { startDate: "2026-01-13", kickoffDate: "2026-02-10", endDate: "2026-07-07" },
   },
 ];
@@ -863,7 +863,7 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
 
   const send = () => {
     if (!msg.trim()) return;
-    onAddChat(company.id, { id: uid(), role: isAdmin ? "강사" : "참여자", senderId: currentUserId, text: msg });
+    onAddChat(company.id, { id: uid(), role: isAdmin ? "강사" : "참여자", senderId: currentUserId, text: msg, createdAt: new Date().toISOString() });
     setMsg("");
   };
 
@@ -947,6 +947,8 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
             {company.chat.map((m, i) => {
               const isMine = m.senderId === currentUserId || (!m.senderId && m.role === (isAdmin ? "강사" : "참여자"));
               const canEdit = isAdmin || isMine;
+              const senderName = m.role === "강사" ? "강사" : (company.participants.find(p => p.id === m.senderId)?.name || "참여자");
+              const timeStr = m.createdAt ? new Date(m.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : "";
 
               return (
                 <div key={m.id || i} className={`flex gap-2 ${m.role === "강사" || m.role === "나" ? "flex-row-reverse" : ""}`}>
@@ -954,10 +956,10 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
                   ${m.role === "강사" ? "bg-violet-100 text-violet-600"
                       : m.role === "참여자" || m.role === "나" ? "bg-sky-100 text-sky-600"
                         : "bg-slate-100 text-slate-500"}`}>
-                    {m.role[0]}
+                    {senderName[0]}
                   </div>
                   <div className={`max-w-[75%] flex flex-col gap-0.5 ${m.role === "강사" || m.role === "나" ? "items-end" : "items-start"}`}>
-                    <span className="text-xs text-slate-400">{m.role}</span>
+                    <span className="text-xs text-slate-400 font-medium">{senderName}</span>
                     {editingId === (m.id || i) ? (
                       <div className="flex flex-col gap-1 items-end w-full">
                         <textarea value={editMsg} onChange={e => setEditMsg(e.target.value)}
@@ -968,20 +970,23 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
                         </div>
                       </div>
                     ) : (
-                      <div className={`group relative px-3 py-2 rounded-2xl text-sm leading-relaxed
-                      ${m.role === "강사" || m.role === "나"
-                          ? "bg-sky-500 text-white rounded-tr-sm"
-                          : "bg-slate-100 text-slate-700 rounded-tl-sm"}`}>
-                        {m.text}
+                      <div className={`flex items-end gap-1.5 ${m.role === "강사" || m.role === "나" ? "flex-row-reverse" : ""}`}>
+                        <div className={`group relative px-3 py-2 rounded-2xl text-sm leading-relaxed
+                        ${m.role === "강사" || m.role === "나"
+                            ? "bg-sky-500 text-white rounded-tr-sm"
+                            : "bg-slate-100 text-slate-700 rounded-tl-sm"}`}>
+                          {m.text}
 
-                        {canEdit && (
-                          <div className={`absolute top-0 flex gap-1 bg-white/90 backdrop-blur shadow-sm border border-slate-100 rounded-lg px-2 py-1.5 
-                          opacity-0 group-hover:opacity-100 transition-opacity z-10
-                          ${m.role === "강사" || m.role === "나" ? "right-full mr-1 -mt-1" : "left-full ml-1 -mt-1"}`}>
-                            <button onClick={() => { setEditingId(m.id || i); setEditMsg(m.text); }} className="text-[11px] font-bold text-slate-500 hover:text-sky-500 whitespace-nowrap px-1">수정</button>
-                            <button onClick={() => onDeleteChat(company.id, m.id)} className="text-[11px] font-bold text-slate-500 hover:text-rose-500 whitespace-nowrap px-1 border-l pl-2 ml-1">삭제</button>
-                          </div>
-                        )}
+                          {canEdit && (
+                            <div className={`absolute top-0 flex gap-1 bg-white/90 backdrop-blur shadow-sm border border-slate-100 rounded-lg px-2 py-1.5 
+                            opacity-0 group-hover:opacity-100 transition-opacity z-10
+                            ${m.role === "강사" || m.role === "나" ? "right-full mr-1 -mt-1" : "left-full ml-1 -mt-1"}`}>
+                              <button onClick={() => { setEditingId(m.id || i); setEditMsg(m.text); }} className="text-[11px] font-bold text-slate-500 hover:text-sky-500 whitespace-nowrap px-1">수정</button>
+                              <button onClick={() => onDeleteChat(company.id, m.id)} className="text-[11px] font-bold text-slate-500 hover:text-rose-500 whitespace-nowrap px-1 border-l pl-2 ml-1">삭제</button>
+                            </div>
+                          )}
+                        </div>
+                        {timeStr && <span className="text-[10px] text-slate-400 shrink-0 mb-1">{timeStr}</span>}
                       </div>
                     )}
                   </div>
