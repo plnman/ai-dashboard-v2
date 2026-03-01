@@ -948,379 +948,380 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
               className="px-3 py-1.5 bg-sky-50 text-sky-600 rounded-lg text-xs font-bold hover:bg-sky-100 transition-colors flex items-center gap-1">
               👤 참여자 등록
             </button>
-            <div className="flex-1 pb-4">
-              {company.participants.length === 0 ? (
-                <p className="px-5 py-20 text-center text-sm text-slate-400">등록된 참여자가 없습니다.</p>
-              ) : (
-                Object.entries(
-                  company.participants.reduce((acc, p) => {
-                    const dept = p.dept || '소속 없음';
-                    if (!acc[dept]) acc[dept] = [];
-                    acc[dept].push(p);
-                    return acc;
-                  }, {})
-                ).sort(([deptA], [deptB]) => deptA.localeCompare(deptB))
-                  .map(([dept, members]) => {
-                    members.sort((a, b) => a.name.localeCompare(b.name));
-                    return (
-                      <div key={dept} className="mb-2">
-                        <div className="px-5 py-2.5 bg-slate-50 border-y border-slate-100 sticky top-0 z-10">
-                          <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">{dept} ({members.length})</h4>
-                        </div>
-                        <div className="divide-y divide-slate-50">
-                          {members.map((p) => (
-                            <div key={p.id} className="px-5 py-4 hover:bg-slate-50 transition-colors">
-                              <div className="flex items-center justify-between mb-2">
-                                <div>
-                                  <span className="font-semibold text-slate-700 text-sm">{p.name}</span>
-                                  <span className="ml-2 text-xs text-slate-400">{p.dept}</span>
-                                </div>
-                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${sBadge(p.status)}`}>
-                                  {p.status === "정상" ? "🟢" : "⚠️"} {p.status}
-                                </span>
-                              </div>
-                              <PBar v={avgProgress(p)} />
-                              <div className="flex items-center justify-between mt-2">
-                                <span className="text-xs text-slate-400">{p.tasks.length}개 과제 · {avgProgress(p)}% 완료</span>
-                                <button onClick={() => onSelectParticipant(p.id)}
-                                  className="text-xs text-violet-600 font-semibold hover:underline">상세보기 →</button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })
-              )}
-            </div>
           </div>
-
-          {/* 실시간 채팅 */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col">
-            <div className="px-5 py-4 border-b border-slate-100 shrink-0">
-              <h3 className="text-sm font-bold text-slate-700">💬 실시간 소통 광장</h3>
-            </div>
-            <div className="flex-1 px-5 py-4 space-y-3 min-h-[180px]">
-              {company.chat.map((m, i) => {
-                const isMine = m.senderId === currentUserId || (!m.senderId && m.role === (isAdmin ? "강사" : "참여자"));
-                const canEdit = isAdmin || isMine;
-
-                // Handle older messages lacking senderId or user deleted: fall back to role string "강사" or "참여자" (not "참")
-                const senderName = m.role === "강사" ? "강사" : ((m.senderId && company.participants.find(p => p.id === m.senderId)?.name) || "참여자");
-                const timeStr = m.createdAt ? new Date(m.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : "";
-
-                return (
-                  <div key={m.id || i} className={`flex gap-2 ${m.role === "강사" || m.role === "나" ? "flex-row-reverse" : ""}`}>
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0
-                  ${m.role === "강사" ? "bg-violet-100 text-violet-600"
-                        : m.role === "참여자" || m.role === "나" ? "bg-sky-100 text-sky-600"
-                          : "bg-slate-100 text-slate-500"}`}>
-                      {senderName[0]}
-                    </div>
-                    <div className={`max-w-[75%] flex flex-col gap-0.5 ${m.role === "강사" || m.role === "나" ? "items-end" : "items-start"}`}>
-                      {editingId === (m.id || i) ? (
-                        <div className="flex flex-col gap-1 items-end w-full">
-                          <textarea value={editMsg} onChange={e => setEditMsg(e.target.value)}
-                            className="w-full min-w-[200px] px-3 py-2 text-sm bg-white border border-violet-300 rounded-xl outline-none resize-none" rows={2} />
-                          <div className="flex gap-1 mt-1">
-                            <button onClick={() => setEditingId(null)} className="text-xs px-2 py-1 text-slate-400 hover:text-slate-600 font-semibold">취소</button>
-                            <button onClick={saveEdit} className="text-xs px-2 py-1 bg-violet-500 text-white rounded hover:bg-violet-600 font-semibold">저장</button>
+          <div className="flex-1 pb-4">
+            {company.participants.length === 0 ? (
+              <p className="px-5 py-20 text-center text-sm text-slate-400">등록된 참여자가 없습니다.</p>
+            ) : (
+              Object.entries(
+                company.participants.reduce((acc, p) => {
+                  const dept = p.dept || '소속 없음';
+                  if (!acc[dept]) acc[dept] = [];
+                  acc[dept].push(p);
+                  return acc;
+                }, {})
+              ).sort(([deptA], [deptB]) => deptA.localeCompare(deptB))
+                .map(([dept, members]) => {
+                  members.sort((a, b) => a.name.localeCompare(b.name));
+                  return (
+                    <div key={dept} className="mb-2">
+                      <div className="px-5 py-2.5 bg-slate-50 border-y border-slate-100 sticky top-0 z-10">
+                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">{dept} ({members.length})</h4>
+                      </div>
+                      <div className="divide-y divide-slate-50">
+                        {members.map((p) => (
+                          <div key={p.id} className="px-5 py-4 hover:bg-slate-50 transition-colors">
+                            <div className="flex items-center justify-between mb-2">
+                              <div>
+                                <span className="font-semibold text-slate-700 text-sm">{p.name}</span>
+                                <span className="ml-2 text-xs text-slate-400">{p.dept}</span>
+                              </div>
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${sBadge(p.status)}`}>
+                                {p.status === "정상" ? "🟢" : "⚠️"} {p.status}
+                              </span>
+                            </div>
+                            <PBar v={avgProgress(p)} />
+                            <div className="flex items-center justify-between mt-2">
+                              <span className="text-xs text-slate-400">{p.tasks.length}개 과제 · {avgProgress(p)}% 완료</span>
+                              <button onClick={() => onSelectParticipant(p.id)}
+                                className="text-xs text-violet-600 font-semibold hover:underline">상세보기 →</button>
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <div className={`flex items-end gap-1.5 ${m.role === "강사" || m.role === "나" ? "flex-row-reverse" : "flex-row"}`}>
-                          <div className={`group relative px-3 py-2 rounded-2xl text-sm leading-relaxed
-                        ${m.role === "강사" || m.role === "나"
-                              ? "bg-sky-500 text-white rounded-tr-sm"
-                              : "bg-slate-100 text-slate-700 rounded-tl-sm"}`}>
-                            {m.text}
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+            )}
+          </div>
+        </div>                      </div>
+      {/* 실시간 채팅 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+        <div className="px-5 py-4 border-b border-slate-100 shrink-0">
+          <h3 className="text-sm font-bold text-slate-700">💬 실시간 소통 광장</h3>
+        </div>
+        <div className="flex-1 px-5 py-4 space-y-3 min-h-[180px]">
+          {company.chat.map((m, i) => {
+            const isMine = m.senderId === currentUserId || (!m.senderId && m.role === (isAdmin ? "강사" : "참여자"));
+            const canEdit = isAdmin || isMine;
 
-                            {canEdit && (
-                              <div className={`absolute top-0 flex gap-1 bg-white/90 backdrop-blur shadow-sm border border-slate-100 rounded-lg px-2 py-1.5 
+            // Handle older messages lacking senderId or user deleted: fall back to role string "강사" or "참여자" (not "참")
+            const senderName = m.role === "강사" ? "강사" : ((m.senderId && company.participants.find(p => p.id === m.senderId)?.name) || "참여자");
+            const timeStr = m.createdAt ? new Date(m.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : "";
+
+            return (
+              <div key={m.id || i} className={`flex gap-2 ${m.role === "강사" || m.role === "나" ? "flex-row-reverse" : ""}`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0
+                  ${m.role === "강사" ? "bg-violet-100 text-violet-600"
+                    : m.role === "참여자" || m.role === "나" ? "bg-sky-100 text-sky-600"
+                      : "bg-slate-100 text-slate-500"}`}>
+                  {senderName[0]}
+                </div>
+                <div className={`max-w-[75%] flex flex-col gap-0.5 ${m.role === "강사" || m.role === "나" ? "items-end" : "items-start"}`}>
+                  {editingId === (m.id || i) ? (
+                    <div className="flex flex-col gap-1 items-end w-full">
+                      <textarea value={editMsg} onChange={e => setEditMsg(e.target.value)}
+                        className="w-full min-w-[200px] px-3 py-2 text-sm bg-white border border-violet-300 rounded-xl outline-none resize-none" rows={2} />
+                      <div className="flex gap-1 mt-1">
+                        <button onClick={() => setEditingId(null)} className="text-xs px-2 py-1 text-slate-400 hover:text-slate-600 font-semibold">취소</button>
+                        <button onClick={saveEdit} className="text-xs px-2 py-1 bg-violet-500 text-white rounded hover:bg-violet-600 font-semibold">저장</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={`flex items-end gap-1.5 ${m.role === "강사" || m.role === "나" ? "flex-row-reverse" : "flex-row"}`}>
+                      <div className={`group relative px-3 py-2 rounded-2xl text-sm leading-relaxed
+                        ${m.role === "강사" || m.role === "나"
+                          ? "bg-sky-500 text-white rounded-tr-sm"
+                          : "bg-slate-100 text-slate-700 rounded-tl-sm"}`}>
+                        {m.text}
+
+                        {canEdit && (
+                          <div className={`absolute top-0 flex gap-1 bg-white/90 backdrop-blur shadow-sm border border-slate-100 rounded-lg px-2 py-1.5 
                             opacity-0 group-hover:opacity-100 transition-opacity z-10
                             ${m.role === "강사" || m.role === "나" ? "right-full mr-1 -mt-1" : "left-full ml-1 -mt-1"}`}>
-                                <button onClick={() => { setEditingId(m.id || i); setEditMsg(m.text); }} className="text-[11px] font-bold text-slate-500 hover:text-sky-500 whitespace-nowrap px-1">수정</button>
-                                <button onClick={() => onDeleteChat(company.id, m.id)} className="text-[11px] font-bold text-slate-500 hover:text-rose-500 whitespace-nowrap px-1 border-l pl-2 ml-1">삭제</button>
-                              </div>
-                            )}
+                            <button onClick={() => { setEditingId(m.id || i); setEditMsg(m.text); }} className="text-[11px] font-bold text-slate-500 hover:text-sky-500 whitespace-nowrap px-1">수정</button>
+                            <button onClick={() => onDeleteChat(company.id, m.id)} className="text-[11px] font-bold text-slate-500 hover:text-rose-500 whitespace-nowrap px-1 border-l pl-2 ml-1">삭제</button>
                           </div>
-                          {timeStr && <span className="text-[10px] text-slate-400 shrink-0 mb-1">{timeStr}</span>}
-                        </div>
-                      )}
+                        )}
+                      </div>
+                      {timeStr && <span className="text-[10px] text-slate-400 shrink-0 mb-1">{timeStr}</span>}
                     </div>
-                  </div>
-                )
-              })}
-              <div ref={chatEndRef} />
-            </div>
-            <div className="px-4 py-3 border-t border-slate-100 flex gap-2">
-              <input value={msg} onChange={(e) => setMsg(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && send()} placeholder="메시지 입력..."
-                className="flex-1 px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-50 transition-all" />
-              <button onClick={send}
-                className="px-4 py-2 bg-violet-500 text-white rounded-xl text-sm font-semibold hover:bg-violet-600 transition-colors">
-                전송
-              </button>
-            </div>
-          </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+          <div ref={chatEndRef} />
         </div>
-      </div>
-      );
+        <div className="px-4 py-3 border-t border-slate-100 flex gap-2">
+          <input value={msg} onChange={(e) => setMsg(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && send()} placeholder="메시지 입력..."
+            className="flex-1 px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-50 transition-all" />
+          <button onClick={send}
+            className="px-4 py-2 bg-violet-500 text-white rounded-xl text-sm font-semibold hover:bg-violet-600 transition-colors">
+            전송
+          </button>
+        </div>
+      </div >
+    </div >
+      </div >
+    </div >
+  );
 }
 
-      /* ═══════════════════════════════════════════════════
-         TAB 3 — 개인 대시보드 (관리자 + 참여자 통합)
-      ═══════════════════════════════════════════════════ */
-      function PersonalDashboard({participant, companyName, schedule, isAdmin, isMine, onUpdate, onAddTask, onDeleteTask}) {
+/* ═══════════════════════════════════════════════════
+   TAB 3 — 개인 대시보드 (관리자 + 참여자 통합)
+═══════════════════════════════════════════════════ */
+function PersonalDashboard({ participant, companyName, schedule, isAdmin, isMine, onUpdate, onAddTask, onDeleteTask }) {
   const [showAddTask, setShowAddTask] = useState(false);
-      const [editSummary, setEditSummary] = useState(false);
-      const [summaryDraft, setSummaryDraft] = useState(participant.summary);
-      const [planDraft, setPlanDraft] = useState(participant.nextWeekPlan || "");
-      const [memoDraft, setMemoDraft] = useState(participant.instructorMemo);
+  const [editSummary, setEditSummary] = useState(false);
+  const [summaryDraft, setSummaryDraft] = useState(participant.summary);
+  const [planDraft, setPlanDraft] = useState(participant.nextWeekPlan || "");
+  const [memoDraft, setMemoDraft] = useState(participant.instructorMemo);
 
   const updateProgress = (tid, val) =>
-      onUpdate({...participant, tasks: participant.tasks.map((t) => t.id === tid ? {...t, progress: Number(val) } : t) });
-  const saveSummary = () => {onUpdate({ ...participant, summary: summaryDraft, nextWeekPlan: planDraft }); setEditSummary(false); };
-  const saveMemo = () => onUpdate({...participant, instructorMemo: memoDraft });
-  const saveStatus = (s) => onUpdate({...participant, status: s });
+    onUpdate({ ...participant, tasks: participant.tasks.map((t) => t.id === tid ? { ...t, progress: Number(val) } : t) });
+  const saveSummary = () => { onUpdate({ ...participant, summary: summaryDraft, nextWeekPlan: planDraft }); setEditSummary(false); };
+  const saveMemo = () => onUpdate({ ...participant, instructorMemo: memoDraft });
+  const saveStatus = (s) => onUpdate({ ...participant, status: s });
 
-      // ── 일정 계산 ──────────────────────────────────────────────
-      const sc = schedule || { };
-      const hasSchedule = sc.startDate && sc.endDate;
-      let targetPct = 0;
-      let schedStatus = "미설정";
-      let schedStatusColor = "text-slate-400";
-      let schedStatusBg = "bg-slate-50 border-slate-200";
-      const actualPct = avgProgress(participant);
+  // ── 일정 계산 ──────────────────────────────────────────────
+  const sc = schedule || {};
+  const hasSchedule = sc.startDate && sc.endDate;
+  let targetPct = 0;
+  let schedStatus = "미설정";
+  let schedStatusColor = "text-slate-400";
+  let schedStatusBg = "bg-slate-50 border-slate-200";
+  const actualPct = avgProgress(participant);
 
-      if (hasSchedule) {
+  if (hasSchedule) {
     const today = new Date();
-      const start = new Date(sc.startDate);
-      const end = new Date(sc.endDate);
-      const totalMs = end - start;
-      const elapsedMs = today - start;
-      targetPct = Math.min(100, Math.max(0, Math.round((elapsedMs / totalMs) * 100)));
-      const diff = actualPct - targetPct;
+    const start = new Date(sc.startDate);
+    const end = new Date(sc.endDate);
+    const totalMs = end - start;
+    const elapsedMs = today - start;
+    targetPct = Math.min(100, Math.max(0, Math.round((elapsedMs / totalMs) * 100)));
+    const diff = actualPct - targetPct;
     if (diff >= 0) {
-        schedStatus = "양호"; schedStatusColor = "text-emerald-700"; schedStatusBg = "bg-emerald-50 border-emerald-200";
+      schedStatus = "양호"; schedStatusColor = "text-emerald-700"; schedStatusBg = "bg-emerald-50 border-emerald-200";
     } else if (diff >= -15) {
-        schedStatus = "정상"; schedStatusColor = "text-amber-700"; schedStatusBg = "bg-amber-50 border-amber-200";
+      schedStatus = "정상"; schedStatusColor = "text-amber-700"; schedStatusBg = "bg-amber-50 border-amber-200";
     } else {
-        schedStatus = "정체"; schedStatusColor = "text-rose-700"; schedStatusBg = "bg-rose-50 border-rose-200";
+      schedStatus = "정체"; schedStatusColor = "text-rose-700"; schedStatusBg = "bg-rose-50 border-rose-200";
     }
   }
 
-      return (
-      <div className="space-y-4">
-        {showAddTask && (
-          <AddTaskModal onAdd={(name) => onAddTask(participant.id, name)} onClose={() => setShowAddTask(false)} />
-        )}
+  return (
+    <div className="space-y-4">
+      {showAddTask && (
+        <AddTaskModal onAdd={(name) => onAddTask(participant.id, name)} onClose={() => setShowAddTask(false)} />
+      )}
 
-        {/* 헤더 카드 */}
-        <div className="bg-gradient-to-r from-violet-500 via-indigo-500 to-blue-500 rounded-2xl p-5 text-white flex items-center justify-between shadow-md">
-          <div>
-            <div className="text-xs opacity-70 mb-0.5">{companyName} · {participant.dept}</div>
-            <div className="text-2xl font-extrabold">{participant.name}</div>
-            <div className="text-xs opacity-60 mt-1">{participant.email}</div>
-          </div>
-          <div className="text-right">
-            <div className="text-5xl font-black">{actualPct}%</div>
-            <div className="text-xs opacity-70">전체 진척도</div>
-            {isMine ? (
-              <select value={participant.status} onChange={(e) => saveStatus(e.target.value)}
-                className="mt-2 px-3 py-1 bg-white/20 text-white text-xs font-semibold rounded-full border border-white/30 outline-none cursor-pointer backdrop-blur">
-                <option value="정상" className="text-slate-800">🟢 정상 진행</option>
-                <option value="정체" className="text-slate-800">⚠️ 실적 정체</option>
-              </select>
-            ) : (
-              <div className="mt-2 px-3 py-1 bg-white/20 text-white text-xs font-semibold rounded-full border border-white/30 inline-block backdrop-blur">
-                {participant.status === "정상" ? "🟢 정상 진행" : "⚠️ 실적 정체"}
-              </div>
-            )}
-          </div>
+      {/* 헤더 카드 */}
+      <div className="bg-gradient-to-r from-violet-500 via-indigo-500 to-blue-500 rounded-2xl p-5 text-white flex items-center justify-between shadow-md">
+        <div>
+          <div className="text-xs opacity-70 mb-0.5">{companyName} · {participant.dept}</div>
+          <div className="text-2xl font-extrabold">{participant.name}</div>
+          <div className="text-xs opacity-60 mt-1">{participant.email}</div>
         </div>
-
-        {/* 📅 프로젝트 일정 vs 실적 카드 */}
-        {hasSchedule ? (
-          <div className={`rounded-2xl border p-5 ${schedStatusBg}`}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-slate-700">📅 프로젝트 일정 대비 실적</h3>
-              <span className={`px-3 py-1 rounded-full text-xs font-extrabold border ${schedStatusBg} ${schedStatusColor}`}>
-                {schedStatus === "양호" ? "🟢" : schedStatus === "정상" ? "🟡" : "🔴"} {schedStatus}
-              </span>
-            </div>
-            {/* 타임라인 마일스톤 */}
-            <div className="flex items-center gap-1 mb-4 text-xs">
-              <span className="text-emerald-600 font-semibold">🚀 {sc.startDate}</span>
-              <div className="flex-1 border-t-2 border-dashed border-slate-200 mx-2" />
-              {sc.kickoffDate && <><span className="text-amber-600 font-semibold">🎯 {sc.kickoffDate}</span><div className="flex-1 border-t-2 border-dashed border-slate-200 mx-2" /></>}
-              <span className="text-rose-600 font-semibold">🏁 {sc.endDate}</span>
-            </div>
-            {/* 목표 진척도 바 */}
-            <div className="space-y-2.5">
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-500 font-semibold">⏱ 목표 달성률 (경과일 기준)</span>
-                  <span className="font-extrabold text-slate-700">{targetPct}%</span>
-                </div>
-                <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
-                  <div className="h-3 rounded-full bg-gradient-to-r from-slate-300 to-slate-400 transition-all duration-700"
-                    style={{ width: `${targetPct}%` }} />
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className={`font-semibold ${schedStatusColor}`}>📊 실제 진척도 (참여자 입력)</span>
-                  <span className={`font-extrabold ${schedStatusColor}`}>{actualPct}%</span>
-                </div>
-                <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
-                  <div className={`h-3 rounded-full transition-all duration-700 ${schedStatus === "양호" ? "bg-gradient-to-r from-emerald-400 to-emerald-500"
-                    : schedStatus === "정상" ? "bg-gradient-to-r from-amber-400 to-amber-500"
-                      : "bg-gradient-to-r from-rose-400 to-rose-500"}`}
-                    style={{ width: `${actualPct}%` }} />
-                </div>
-              </div>
-              <p className="text-xs text-slate-500 text-center pt-1">
-                {schedStatus === "양호" && `목표 대비 ${actualPct - targetPct}% 앞서 있습니다 👍`}
-                {schedStatus === "정상" && `목표 대비 ${targetPct - actualPct}% 이내 — 정상 범위입니다`}
-                {schedStatus === "정체" && `목표 대비 ${targetPct - actualPct}% 뒤처져 있습니다 ⚠️`}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-5 text-center">
-            <p className="text-sm text-slate-400">📅 강사가 아직 프로젝트 일정을 등록하지 않았습니다.</p>
-          </div>
-        )}
-
-        {/* 과제 목록 */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-700">🛠️ 과제 현황</h3>
-            {isMine && (
-              <button onClick={() => setShowAddTask(true)}
-                className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors">
-                ➕ 과제 추가
-              </button>
-            )}
-          </div>
-          {participant.tasks.length === 0 ? (
-            <p className="px-5 py-10 text-center text-sm text-slate-400">등록된 과제가 없습니다.</p>
+        <div className="text-right">
+          <div className="text-5xl font-black">{actualPct}%</div>
+          <div className="text-xs opacity-70">전체 진척도</div>
+          {isMine ? (
+            <select value={participant.status} onChange={(e) => saveStatus(e.target.value)}
+              className="mt-2 px-3 py-1 bg-white/20 text-white text-xs font-semibold rounded-full border border-white/30 outline-none cursor-pointer backdrop-blur">
+              <option value="정상" className="text-slate-800">🟢 정상 진행</option>
+              <option value="정체" className="text-slate-800">⚠️ 실적 정체</option>
+            </select>
           ) : (
-            <div className="divide-y divide-slate-50">
-              {participant.tasks.map((t) => (
-                <div key={t.id} className="px-5 py-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold text-slate-700 text-sm">🔗 {t.name}</span>
-                    <div className="flex items-center gap-2">
-                      <DeltaEl d={t.delta} />
-                      <span className="text-sm font-bold text-slate-700 w-8 text-right">{t.progress}%</span>
-                      {isMine && (
-                        <button onClick={() => onDeleteTask(participant.id, t.id)}
-                          className="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-rose-400 hover:bg-rose-50 rounded-lg transition-colors"
-                          title="과제 삭제">×</button>
-                      )}
-                    </div>
-                  </div>
-                  <PBar v={t.progress} />
-                  {isMine && (
-                    <input type="range" min={0} max={100} value={t.progress}
-                      onChange={(e) => updateProgress(t.id, e.target.value)}
-                      className="w-full mt-2.5 accent-violet-500 cursor-pointer" />
-                  )}
-                </div>
-              ))}
+            <div className="mt-2 px-3 py-1 bg-white/20 text-white text-xs font-semibold rounded-full border border-white/30 inline-block backdrop-blur">
+              {participant.status === "정상" ? "🟢 정상 진행" : "⚠️ 실적 정체"}
             </div>
           )}
         </div>
+      </div>
 
-        {/* 금주 요약 보고 */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-700">📝 금주 요약 및 차주 계획</h3>
-            {isMine && (
-              <button onClick={() => { setSummaryDraft(participant.summary); setPlanDraft(participant.nextWeekPlan || ""); setEditSummary(!editSummary); }}
-                className="text-xs text-violet-500 font-semibold hover:underline">
-                {editSummary ? "취소" : "✏️ 수정"}
-              </button>
-            )}
+      {/* 📅 프로젝트 일정 vs 실적 카드 */}
+      {hasSchedule ? (
+        <div className={`rounded-2xl border p-5 ${schedStatusBg}`}>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-slate-700">📅 프로젝트 일정 대비 실적</h3>
+            <span className={`px-3 py-1 rounded-full text-xs font-extrabold border ${schedStatusBg} ${schedStatusColor}`}>
+              {schedStatus === "양호" ? "🟢" : schedStatus === "정상" ? "🟡" : "🔴"} {schedStatus}
+            </span>
           </div>
-          <div className="px-5 py-4">
-            {editSummary ? (
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 block mb-1">금주 요약</label>
-                  <textarea value={summaryDraft} onChange={(e) => setSummaryDraft(e.target.value)} rows={3}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-50 resize-none transition-all" />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 block mb-1">차주 계획</label>
-                  <textarea value={planDraft} onChange={(e) => setPlanDraft(e.target.value)} rows={3}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-50 resize-none transition-all" />
-                </div>
-                <div className="flex justify-end">
-                  <button onClick={saveSummary}
-                    className="px-5 py-2 bg-emerald-500 text-white rounded-xl text-sm font-semibold hover:bg-emerald-600 transition-colors">
-                    저장
-                  </button>
-                </div>
+          {/* 타임라인 마일스톤 */}
+          <div className="flex items-center gap-1 mb-4 text-xs">
+            <span className="text-emerald-600 font-semibold">🚀 {sc.startDate}</span>
+            <div className="flex-1 border-t-2 border-dashed border-slate-200 mx-2" />
+            {sc.kickoffDate && <><span className="text-amber-600 font-semibold">🎯 {sc.kickoffDate}</span><div className="flex-1 border-t-2 border-dashed border-slate-200 mx-2" /></>}
+            <span className="text-rose-600 font-semibold">🏁 {sc.endDate}</span>
+          </div>
+          {/* 목표 진척도 바 */}
+          <div className="space-y-2.5">
+            <div>
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-slate-500 font-semibold">⏱ 목표 달성률 (경과일 기준)</span>
+                <span className="font-extrabold text-slate-700">{targetPct}%</span>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <span className="text-xs font-semibold text-slate-400 block mb-1.5">금주 요약</span>
-                  <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 rounded-xl p-3">{participant.summary || "내용이 없습니다."}</p>
-                </div>
-                <div>
-                  <span className="text-xs font-semibold text-slate-400 block mb-1.5">차주 계획</span>
-                  <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 rounded-xl p-3">{participant.nextWeekPlan || "내용이 없습니다."}</p>
-                </div>
+              <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                <div className="h-3 rounded-full bg-gradient-to-r from-slate-300 to-slate-400 transition-all duration-700"
+                  style={{ width: `${targetPct}%` }} />
               </div>
-            )}
+            </div>
+            <div>
+              <div className="flex justify-between text-xs mb-1">
+                <span className={`font-semibold ${schedStatusColor}`}>📊 실제 진척도 (참여자 입력)</span>
+                <span className={`font-extrabold ${schedStatusColor}`}>{actualPct}%</span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                <div className={`h-3 rounded-full transition-all duration-700 ${schedStatus === "양호" ? "bg-gradient-to-r from-emerald-400 to-emerald-500"
+                  : schedStatus === "정상" ? "bg-gradient-to-r from-amber-400 to-amber-500"
+                    : "bg-gradient-to-r from-rose-400 to-rose-500"}`}
+                  style={{ width: `${actualPct}%` }} />
+              </div>
+            </div>
+            <p className="text-xs text-slate-500 text-center pt-1">
+              {schedStatus === "양호" && `목표 대비 ${actualPct - targetPct}% 앞서 있습니다 👍`}
+              {schedStatus === "정상" && `목표 대비 ${targetPct - actualPct}% 이내 — 정상 범위입니다`}
+              {schedStatus === "정체" && `목표 대비 ${targetPct - actualPct}% 뒤처져 있습니다 ⚠️`}
+            </p>
           </div>
         </div>
+      ) : (
+        <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-5 text-center">
+          <p className="text-sm text-slate-400">📅 강사가 아직 프로젝트 일정을 등록하지 않았습니다.</p>
+        </div>
+      )}
 
-        {/* 강사 피드백 — 관리자만 편집 가능, 참여자는 읽기 전용 */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-700">✏️ 강사 피드백 메모</h3>
-            {isAdmin && <span className="text-xs bg-violet-50 text-violet-500 px-2 py-0.5 rounded-full">관리자 편집</span>}
+      {/* 과제 목록 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="text-sm font-bold text-slate-700">🛠️ 과제 현황</h3>
+          {isMine && (
+            <button onClick={() => setShowAddTask(true)}
+              className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors">
+              ➕ 과제 추가
+            </button>
+          )}
+        </div>
+        {participant.tasks.length === 0 ? (
+          <p className="px-5 py-10 text-center text-sm text-slate-400">등록된 과제가 없습니다.</p>
+        ) : (
+          <div className="divide-y divide-slate-50">
+            {participant.tasks.map((t) => (
+              <div key={t.id} className="px-5 py-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-slate-700 text-sm">🔗 {t.name}</span>
+                  <div className="flex items-center gap-2">
+                    <DeltaEl d={t.delta} />
+                    <span className="text-sm font-bold text-slate-700 w-8 text-right">{t.progress}%</span>
+                    {isMine && (
+                      <button onClick={() => onDeleteTask(participant.id, t.id)}
+                        className="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-rose-400 hover:bg-rose-50 rounded-lg transition-colors"
+                        title="과제 삭제">×</button>
+                    )}
+                  </div>
+                </div>
+                <PBar v={t.progress} />
+                {isMine && (
+                  <input type="range" min={0} max={100} value={t.progress}
+                    onChange={(e) => updateProgress(t.id, e.target.value)}
+                    className="w-full mt-2.5 accent-violet-500 cursor-pointer" />
+                )}
+              </div>
+            ))}
           </div>
-          <div className="px-5 py-4">
-            {isAdmin ? (
-              <div className="flex gap-3">
-                <input value={memoDraft} onChange={(e) => setMemoDraft(e.target.value)}
-                  className="flex-1 px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-50 transition-all" />
-                <button onClick={saveMemo}
-                  className="px-4 py-2 bg-emerald-500 text-white rounded-xl text-sm font-semibold hover:bg-emerald-600 transition-colors">
+        )}
+      </div>
+
+      {/* 금주 요약 보고 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="text-sm font-bold text-slate-700">📝 금주 요약 및 차주 계획</h3>
+          {isMine && (
+            <button onClick={() => { setSummaryDraft(participant.summary); setPlanDraft(participant.nextWeekPlan || ""); setEditSummary(!editSummary); }}
+              className="text-xs text-violet-500 font-semibold hover:underline">
+              {editSummary ? "취소" : "✏️ 수정"}
+            </button>
+          )}
+        </div>
+        <div className="px-5 py-4">
+          {editSummary ? (
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-500 block mb-1">금주 요약</label>
+                <textarea value={summaryDraft} onChange={(e) => setSummaryDraft(e.target.value)} rows={3}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-50 resize-none transition-all" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500 block mb-1">차주 계획</label>
+                <textarea value={planDraft} onChange={(e) => setPlanDraft(e.target.value)} rows={3}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-50 resize-none transition-all" />
+              </div>
+              <div className="flex justify-end">
+                <button onClick={saveSummary}
+                  className="px-5 py-2 bg-emerald-500 text-white rounded-xl text-sm font-semibold hover:bg-emerald-600 transition-colors">
                   저장
                 </button>
               </div>
-            ) : (
-              <p className="text-sm text-slate-600 bg-slate-50 rounded-xl p-3">{participant.instructorMemo || "—"}</p>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <span className="text-xs font-semibold text-slate-400 block mb-1.5">금주 요약</span>
+                <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 rounded-xl p-3">{participant.summary || "내용이 없습니다."}</p>
+              </div>
+              <div>
+                <span className="text-xs font-semibold text-slate-400 block mb-1.5">차주 계획</span>
+                <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 rounded-xl p-3">{participant.nextWeekPlan || "내용이 없습니다."}</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
-      );
+
+      {/* 강사 피드백 — 관리자만 편집 가능, 참여자는 읽기 전용 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="text-sm font-bold text-slate-700">✏️ 강사 피드백 메모</h3>
+          {isAdmin && <span className="text-xs bg-violet-50 text-violet-500 px-2 py-0.5 rounded-full">관리자 편집</span>}
+        </div>
+        <div className="px-5 py-4">
+          {isAdmin ? (
+            <div className="flex gap-3">
+              <input value={memoDraft} onChange={(e) => setMemoDraft(e.target.value)}
+                className="flex-1 px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-50 transition-all" />
+              <button onClick={saveMemo}
+                className="px-4 py-2 bg-emerald-500 text-white rounded-xl text-sm font-semibold hover:bg-emerald-600 transition-colors">
+                저장
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-600 bg-slate-50 rounded-xl p-3">{participant.instructorMemo || "—"}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
-      /* ═══════════════════════════════════════════════════
-         메인 APP
-      ═══════════════════════════════════════════════════ */
-      export default function App() {
+/* ═══════════════════════════════════════════════════
+   메인 APP
+═══════════════════════════════════════════════════ */
+export default function App() {
   const [companies, setCompanies] = useState(INIT);
-      const companiesRef = useRef(companies);
-  useEffect(() => {companiesRef.current = companies; }, [companies]);
+  const companiesRef = useRef(companies);
+  useEffect(() => { companiesRef.current = companies; }, [companies]);
 
-      const [isDbLoaded, setIsDbLoaded] = useState(false);
-      const [authState, setAuthState] = useState(null);
+  const [isDbLoaded, setIsDbLoaded] = useState(false);
+  const [authState, setAuthState] = useState(null);
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "dashboard", "data"), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data().companies;
-      if (data) setCompanies(data);
+        if (data) setCompanies(data);
       } else {
         setDoc(doc(db, "dashboard", "data"), { companies: INIT });
       }
@@ -1331,50 +1332,50 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
 
   const updateCompanies = (updater) => {
     const next = typeof updater === "function" ? updater(companiesRef.current) : updater;
-      setCompanies(next); // Optimistic UI update
-      if (isDbLoaded) {
-        setDoc(doc(db, "dashboard", "data"), { companies: next });
+    setCompanies(next); // Optimistic UI update
+    if (isDbLoaded) {
+      setDoc(doc(db, "dashboard", "data"), { companies: next });
     }
   };
 
   // null                              = 미로그인 → 로그인 화면
   // {role: 'admin' }                = 관리자
   // {role: 'participant', id: '' }   = 참여자
-      const isAdmin = authState?.role === 'admin';
-      const myParticipantId = authState?.role === 'participant' ? authState.id : null;
+  const isAdmin = authState?.role === 'admin';
+  const myParticipantId = authState?.role === 'participant' ? authState.id : null;
 
-      const [tab, setTab] = useState("company");
+  const [tab, setTab] = useState("company");
   const [companyId, setCompanyId] = useState(() => {
     try {
       const saved = localStorage.getItem("ai-dashboard-cid");
       return saved || INIT[0].id;
     } catch { return INIT[0].id; }
   });
-      const [participantId, setParticipantId] = useState(null);
+  const [participantId, setParticipantId] = useState(null);
 
   useEffect(() => {
-        localStorage.setItem("ai-dashboard-cid", companyId);
+    localStorage.setItem("ai-dashboard-cid", companyId);
   }, [companyId]);
 
   const selectedCompany = companies.find((c) => c.id === companyId) || companies[0];
-  const allParticipants = companies.flatMap((c) => c.participants.map((p) => ({...p, companyName: c.name })));
+  const allParticipants = companies.flatMap((c) => c.participants.map((p) => ({ ...p, companyName: c.name })));
   const selectedParticipant = participantId ? allParticipants.find((p) => p.id === participantId) : null;
-      const selectedParticipantCompany = participantId
+  const selectedParticipantCompany = participantId
     ? companies.find((c) => c.participants.some((p) => p.id === participantId))?.name || "" : "";
 
   const addCompany = (name) =>
-    updateCompanies((prev) => [...prev, {id: uid(), name, participants: [], chat: [] }]);
+    updateCompanies((prev) => [...prev, { id: uid(), name, participants: [], chat: [] }]);
 
-      const addParticipant = (cid, {id, name, dept, email}) =>
+  const addParticipant = (cid, { id, name, dept, email }) =>
     updateCompanies((prev) => prev.map((c) =>
       c.id !== cid ? c : {
         ...c,
         participants: [...c.participants, {
-        id: id || uid(), name, dept, email: email || "", status: "정상",
-      tasks: [], summary: "", nextWeekPlan: "", instructorMemo: "",
+          id: id || uid(), name, dept, email: email || "", status: "정상",
+          tasks: [], summary: "", nextWeekPlan: "", instructorMemo: "",
         }],
       }
-      ));
+    ));
 
   const deleteCompany = (cid) => {
     const target = companies.find((c) => c.id === cid);
@@ -1384,71 +1385,71 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
       if (companyId === cid && remaining.length > 0) setCompanyId(remaining[0].id);
       return remaining;
     });
-      if (hadParticipant) setParticipantId(null);
+    if (hadParticipant) setParticipantId(null);
   };
 
   const deleteParticipant = (cid, pid) => {
     const targetComp = companies.find((c) => c.id === cid);
-      if (targetComp && targetComp.participants.length === 1 && targetComp.participants[0].id === pid) {
-        deleteCompany(cid);
+    if (targetComp && targetComp.participants.length === 1 && targetComp.participants[0].id === pid) {
+      deleteCompany(cid);
       return;
     }
     updateCompanies((prev) =>
       prev.map((c) =>
-      c.id !== cid ? c : {...c, participants: c.participants.filter((p) => p.id !== pid) }
+        c.id !== cid ? c : { ...c, participants: c.participants.filter((p) => p.id !== pid) }
       )
-      );
-      if (participantId === pid) setParticipantId(null);
+    );
+    if (participantId === pid) setParticipantId(null);
   };
 
   const updateParticipant = (updated) =>
     updateCompanies((prev) => prev.map((c) => ({
-        ...c, participants: c.participants.map((p) => p.id === updated.id ? updated : p),
+      ...c, participants: c.participants.map((p) => p.id === updated.id ? updated : p),
     })));
 
   const addTask = (pid, name) =>
     updateCompanies((prev) => prev.map((c) => ({
-        ...c, participants: c.participants.map((p) =>
-      p.id === pid ? {...p, tasks: [...p.tasks, {id: uid(), name, progress: 0, delta: 0 }] } : p),
+      ...c, participants: c.participants.map((p) =>
+        p.id === pid ? { ...p, tasks: [...p.tasks, { id: uid(), name, progress: 0, delta: 0 }] } : p),
     })));
 
   const deleteTask = (pid, tid) =>
     updateCompanies((prev) => prev.map((c) => ({
-        ...c, participants: c.participants.map((p) =>
-      p.id === pid ? {...p, tasks: p.tasks.filter((t) => t.id !== tid) } : p),
+      ...c, participants: c.participants.map((p) =>
+        p.id === pid ? { ...p, tasks: p.tasks.filter((t) => t.id !== tid) } : p),
     })));
 
   const updateCompanySchedule = (cid, sched) =>
-    updateCompanies((prev) => prev.map((c) => c.id !== cid ? c : {...c, schedule: sched }));
+    updateCompanies((prev) => prev.map((c) => c.id !== cid ? c : { ...c, schedule: sched }));
 
   const addChat = (cid, message) =>
     updateCompanies((prev) => prev.map((c) =>
-      c.id !== cid ? c : {...c, chat: [...c.chat, message] }
-      ));
+      c.id !== cid ? c : { ...c, chat: [...c.chat, message] }
+    ));
 
   const editChat = (cid, mid, newText) =>
     updateCompanies((prev) => prev.map((c) =>
-      c.id !== cid ? c : {...c, chat: c.chat.map(m => m.id === mid ? {...m, text: newText } : m) }
-      ));
+      c.id !== cid ? c : { ...c, chat: c.chat.map(m => m.id === mid ? { ...m, text: newText } : m) }
+    ));
 
   const deleteChat = (cid, mid) =>
     updateCompanies((prev) => prev.map((c) =>
-      c.id !== cid ? c : {...c, chat: c.chat.filter(m => m.id !== mid) }
-      ));
+      c.id !== cid ? c : { ...c, chat: c.chat.filter(m => m.id !== mid) }
+    ));
 
-  const goToParticipant = (pid) => {setParticipantId(pid); setTab("personal"); };
-  const goToCompany = (cid) => {setCompanyId(cid); setTab("company"); };
+  const goToParticipant = (pid) => { setParticipantId(pid); setTab("personal"); };
+  const goToCompany = (cid) => { setCompanyId(cid); setTab("company"); };
 
   // 참여자 본인 정보 파생
   const myParticipant = myParticipantId ? allParticipants.find((p) => p.id === myParticipantId) : null;
-      const myCompany = myParticipantId
+  const myCompany = myParticipantId
     ? companies.find((c) => c.participants.some((p) => p.id === myParticipantId)) : null;
 
   // 로그인
   const handleLogin = (auth) => {
-        setAuthState(auth);
-      if (auth.role === 'admin') {
-        setTab("instructor");
+    setAuthState(auth);
+    if (auth.role === 'admin') {
+      setTab("instructor");
     } else {
       const c = companies.find((co) => co.participants.some((p) => p.id === auth.id));
       setParticipantId(auth.id);
@@ -1459,150 +1460,150 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
 
   // 로그아웃 → 로그인 화면
   const handleLogout = () => {
-        setAuthState(null);
-      setTab("company");
-      setParticipantId(null);
+    setAuthState(null);
+    setTab("company");
+    setParticipantId(null);
   };
 
-      const tabs = [
-      ...(isAdmin ? [{id: "instructor", label: "🎖️ 강사 관제 센터" }] : []),
-      {id: "company", label: "🏢 업체 허브" },
-      {id: "personal", label: "👤 개인 대시보드" },
-      ];
+  const tabs = [
+    ...(isAdmin ? [{ id: "instructor", label: "🎖️ 강사 관제 센터" }] : []),
+    { id: "company", label: "🏢 업체 허브" },
+    { id: "personal", label: "👤 개인 대시보드" },
+  ];
 
-      if (!isDbLoaded) {
+  if (!isDbLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-violet-500 font-bold animate-pulse text-lg tracking-wide">
           데이터베이스 동기화 중...
         </div>
       </div>
-      );
+    );
   }
 
-      if (!authState) {
+  if (!authState) {
     return <LoginScreen companies={companies} onLogin={handleLogin} onRegister={addParticipant} />;
   }
 
-      return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/30 to-sky-50/40">
-        {/* 헤더 */}
-        <header className="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-10 shadow-sm">
-          <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-gradient-to-br from-violet-500 to-indigo-600 rounded-xl flex items-center justify-center text-white font-extrabold text-sm shadow-sm">AI</div>
-              <div>
-                <h1 className="text-sm font-extrabold text-slate-800 leading-tight">AI 실습 프로젝트</h1>
-                <p className="text-xs text-slate-400">통합 스마트 대시보드</p>
-              </div>
-            </div>
-            {/* 모드 전환 토글 (현재 인증 상태 표시 및 로그아웃) */}
-            <div className="flex items-center gap-3">
-              {isAdmin ? (
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-violet-50 border border-violet-200 rounded-full">
-                    <span className="w-2 h-2 rounded-full bg-violet-500" />
-                    <span className="text-xs font-bold text-violet-700">🔑 관리자</span>
-                  </div>
-                  <button onClick={handleLogout}
-                    className="px-3 py-1.5 rounded-full text-xs font-bold border bg-white text-slate-500 border-slate-200 hover:border-rose-300 hover:text-rose-500 transition-all">
-                    로그아웃
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-sky-50 border border-sky-200 rounded-full">
-                    <span className="w-2 h-2 rounded-full bg-sky-400" />
-                    <span className="text-xs font-bold text-sky-700">👤 {myParticipant?.name}</span>
-                    <span className="text-xs text-sky-500 opacity-70">({myCompany?.name})</span>
-                  </div>
-                  <button onClick={handleLogout}
-                    className="px-3 py-1.5 rounded-full text-xs font-bold border bg-white text-slate-500 border-slate-200 hover:border-rose-300 hover:text-rose-500 transition-all">
-                    로그아웃
-                  </button>
-                </div>
-              )}
-              <span className="text-xs text-slate-400">{new Date().toLocaleDateString("ko-KR")}</span>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/30 to-sky-50/40">
+      {/* 헤더 */}
+      <header className="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-10 shadow-sm">
+        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-gradient-to-br from-violet-500 to-indigo-600 rounded-xl flex items-center justify-center text-white font-extrabold text-sm shadow-sm">AI</div>
+            <div>
+              <h1 className="text-sm font-extrabold text-slate-800 leading-tight">AI 실습 프로젝트</h1>
+              <p className="text-xs text-slate-400">통합 스마트 대시보드</p>
             </div>
           </div>
-          {/* 탭 */}
-          <div className="max-w-6xl mx-auto px-6 flex gap-0.5">
-            {tabs.map((t) => (
-              <button key={t.id} onClick={() => setTab(t.id)}
-                className={`px-4 py-2.5 text-sm font-semibold rounded-t-xl transition-all border-b-2
+          {/* 모드 전환 토글 (현재 인증 상태 표시 및 로그아웃) */}
+          <div className="flex items-center gap-3">
+            {isAdmin ? (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-violet-50 border border-violet-200 rounded-full">
+                  <span className="w-2 h-2 rounded-full bg-violet-500" />
+                  <span className="text-xs font-bold text-violet-700">🔑 관리자</span>
+                </div>
+                <button onClick={handleLogout}
+                  className="px-3 py-1.5 rounded-full text-xs font-bold border bg-white text-slate-500 border-slate-200 hover:border-rose-300 hover:text-rose-500 transition-all">
+                  로그아웃
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-sky-50 border border-sky-200 rounded-full">
+                  <span className="w-2 h-2 rounded-full bg-sky-400" />
+                  <span className="text-xs font-bold text-sky-700">👤 {myParticipant?.name}</span>
+                  <span className="text-xs text-sky-500 opacity-70">({myCompany?.name})</span>
+                </div>
+                <button onClick={handleLogout}
+                  className="px-3 py-1.5 rounded-full text-xs font-bold border bg-white text-slate-500 border-slate-200 hover:border-rose-300 hover:text-rose-500 transition-all">
+                  로그아웃
+                </button>
+              </div>
+            )}
+            <span className="text-xs text-slate-400">{new Date().toLocaleDateString("ko-KR")}</span>
+          </div>
+        </div>
+        {/* 탭 */}
+        <div className="max-w-6xl mx-auto px-6 flex gap-0.5">
+          {tabs.map((t) => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`px-4 py-2.5 text-sm font-semibold rounded-t-xl transition-all border-b-2
                 ${tab === t.id
-                    ? "text-violet-600 border-violet-500 bg-violet-50"
-                    : "text-slate-400 border-transparent hover:text-slate-600 hover:bg-slate-50"}`}>
-                {t.label}
+                  ? "text-violet-600 border-violet-500 bg-violet-50"
+                  : "text-slate-400 border-transparent hover:text-slate-600 hover:bg-slate-50"}`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      <main className="max-w-6xl mx-auto px-6 py-6">
+        {/* 업체 선택 칩 — 참여자 모드면 본인 업체만 */}
+        {tab === "company" && (
+          <div className="flex gap-2 mb-5 flex-wrap">
+            {(isAdmin ? companies : (myCompany ? [myCompany] : [])).map((c) => (
+              <button key={c.id} onClick={() => isAdmin && setCompanyId(c.id)}
+                className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all
+                  ${companyId === c.id ? "bg-sky-500 text-white shadow-sm" : "bg-white text-slate-500 border border-slate-200 hover:border-sky-300"}
+                  ${!isAdmin ? "cursor-default" : ""}`}>
+                {c.name}
               </button>
             ))}
           </div>
-        </header>
+        )}
 
-        <main className="max-w-6xl mx-auto px-6 py-6">
-          {/* 업체 선택 칩 — 참여자 모드면 본인 업체만 */}
-          {tab === "company" && (
-            <div className="flex gap-2 mb-5 flex-wrap">
-              {(isAdmin ? companies : (myCompany ? [myCompany] : [])).map((c) => (
-                <button key={c.id} onClick={() => isAdmin && setCompanyId(c.id)}
-                  className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all
-                  ${companyId === c.id ? "bg-sky-500 text-white shadow-sm" : "bg-white text-slate-500 border border-slate-200 hover:border-sky-300"}
-                  ${!isAdmin ? "cursor-default" : ""}`}>
-                  {c.name}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* 참여자 선택 칩 — 참여자 모드면 본인 업체 구성원 모두 표시 */}
-          {tab === "personal" && (
-            <div className="flex gap-2 mb-5 flex-wrap">
-              {(isAdmin ? allParticipants : (myCompany ? myCompany.participants.map(p => ({ ...p, companyName: myCompany.name })) : [])).map((p) => (
-                <button key={p.id} onClick={() => setParticipantId(p.id)}
-                  className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all
+        {/* 참여자 선택 칩 — 참여자 모드면 본인 업체 구성원 모두 표시 */}
+        {tab === "personal" && (
+          <div className="flex gap-2 mb-5 flex-wrap">
+            {(isAdmin ? allParticipants : (myCompany ? myCompany.participants.map(p => ({ ...p, companyName: myCompany.name })) : [])).map((p) => (
+              <button key={p.id} onClick={() => setParticipantId(p.id)}
+                className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all
                   ${participantId === p.id ? "bg-violet-500 text-white shadow-sm" : "bg-white text-slate-500 border border-slate-200 hover:border-violet-300 hover:bg-violet-50"}`}>
-                  {p.name}<span className="opacity-60 text-xs ml-1">({p.companyName})</span>
-                </button>
-              ))}
-            </div>
-          )}
+                {p.name}<span className="opacity-60 text-xs ml-1">({p.companyName})</span>
+              </button>
+            ))}
+          </div>
+        )}
 
-          {/* 탭 콘텐츠 */}
-          {tab === "instructor" && isAdmin && (
-            <InstructorView companies={companies} onSelectCompany={goToCompany}
-              onSelectParticipant={goToParticipant} onAddCompany={addCompany}
-              onDeleteCompany={deleteCompany} onDeleteParticipant={deleteParticipant}
-              onUpdateSchedule={updateCompanySchedule} />
-          )}
+        {/* 탭 콘텐츠 */}
+        {tab === "instructor" && isAdmin && (
+          <InstructorView companies={companies} onSelectCompany={goToCompany}
+            onSelectParticipant={goToParticipant} onAddCompany={addCompany}
+            onDeleteCompany={deleteCompany} onDeleteParticipant={deleteParticipant}
+            onUpdateSchedule={updateCompanySchedule} />
+        )}
 
-          {tab === "company" && selectedCompany && (
-            <CompanyHub key={selectedCompany.id} company={selectedCompany}
-              isAdmin={isAdmin} onSelectParticipant={goToParticipant}
-              onAddParticipant={addParticipant} onAddChat={addChat}
-              onEditChat={editChat} onDeleteChat={deleteChat}
-              currentUserId={isAdmin ? "admin" : myParticipantId} />
-          )}
-          {tab === "company" && !selectedCompany && (
-            <div className="text-center py-24 text-slate-400">
-              <div className="text-5xl mb-3">🏢</div>
-              <p className="text-sm font-medium">업체를 선택해 주세요</p>
-            </div>
-          )}
+        {tab === "company" && selectedCompany && (
+          <CompanyHub key={selectedCompany.id} company={selectedCompany}
+            isAdmin={isAdmin} onSelectParticipant={goToParticipant}
+            onAddParticipant={addParticipant} onAddChat={addChat}
+            onEditChat={editChat} onDeleteChat={deleteChat}
+            currentUserId={isAdmin ? "admin" : myParticipantId} />
+        )}
+        {tab === "company" && !selectedCompany && (
+          <div className="text-center py-24 text-slate-400">
+            <div className="text-5xl mb-3">🏢</div>
+            <p className="text-sm font-medium">업체를 선택해 주세요</p>
+          </div>
+        )}
 
-          {tab === "personal" && selectedParticipant && (
-            <PersonalDashboard key={selectedParticipant.id} participant={selectedParticipant}
-              companyName={selectedParticipantCompany} isAdmin={isAdmin}
-              isMine={isAdmin || myParticipantId === selectedParticipant.id}
-              schedule={companies.find((c) => c.participants.some((p) => p.id === selectedParticipant.id))?.schedule}
-              onUpdate={updateParticipant} onAddTask={addTask} onDeleteTask={deleteTask} />
-          )}
-          {tab === "personal" && !selectedParticipant && (
-            <div className="text-center py-24 text-slate-400">
-              <div className="text-5xl mb-3">👆</div>
-              <p className="text-sm font-medium">위에서 참여자를 선택해 주세요</p>
-            </div>
-          )}
-        </main>
-      </div>
-      );
+        {tab === "personal" && selectedParticipant && (
+          <PersonalDashboard key={selectedParticipant.id} participant={selectedParticipant}
+            companyName={selectedParticipantCompany} isAdmin={isAdmin}
+            isMine={isAdmin || myParticipantId === selectedParticipant.id}
+            schedule={companies.find((c) => c.participants.some((p) => p.id === selectedParticipant.id))?.schedule}
+            onUpdate={updateParticipant} onAddTask={addTask} onDeleteTask={deleteTask} />
+        )}
+        {tab === "personal" && !selectedParticipant && (
+          <div className="text-center py-24 text-slate-400">
+            <div className="text-5xl mb-3">👆</div>
+            <p className="text-sm font-medium">위에서 참여자를 선택해 주세요</p>
+          </div>
+        )}
+      </main>
+    </div>
+  );
 }
