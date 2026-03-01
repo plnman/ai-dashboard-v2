@@ -994,78 +994,77 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
                 })
             )}
           </div>
-        </div>                      </div>
-      {/* 실시간 채팅 */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col">
-        <div className="px-5 py-4 border-b border-slate-100 shrink-0">
-          <h3 className="text-sm font-bold text-slate-700">💬 실시간 소통 광장</h3>
         </div>
-        <div className="flex-1 px-5 py-4 space-y-3 min-h-[180px]">
-          {company.chat.map((m, i) => {
-            const isMine = m.senderId === currentUserId || (!m.senderId && m.role === (isAdmin ? "강사" : "참여자"));
-            const canEdit = isAdmin || isMine;
+        {/* 실시간 채팅 */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+          <div className="px-5 py-4 border-b border-slate-100 shrink-0">
+            <h3 className="text-sm font-bold text-slate-700">💬 실시간 소통 광장</h3>
+          </div>
+          <div className="flex-1 px-5 py-4 space-y-3 min-h-[180px]">
+            {company.chat.map((m, i) => {
+              const isMine = m.senderId === currentUserId || (!m.senderId && m.role === (isAdmin ? "강사" : "참여자"));
+              const canEdit = isAdmin || isMine;
 
-            // Handle older messages lacking senderId or user deleted: fall back to role string "강사" or "참여자" (not "참")
-            const senderName = m.role === "강사" ? "강사" : ((m.senderId && company.participants.find(p => p.id === m.senderId)?.name) || "참여자");
-            const timeStr = m.createdAt ? new Date(m.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : "";
+              // Handle older messages lacking senderId or user deleted: fall back to role string "강사" or "참여자" (not "참")
+              const senderName = m.role === "강사" ? "강사" : ((m.senderId && company.participants.find(p => p.id === m.senderId)?.name) || "참여자");
+              const timeStr = m.createdAt ? new Date(m.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : "";
 
-            return (
-              <div key={m.id || i} className={`flex gap-2 ${m.role === "강사" || m.role === "나" ? "flex-row-reverse" : ""}`}>
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0
+              return (
+                <div key={m.id || i} className={`flex gap-2 ${m.role === "강사" || m.role === "나" ? "flex-row-reverse" : ""}`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0
                   ${m.role === "강사" ? "bg-violet-100 text-violet-600"
-                    : m.role === "참여자" || m.role === "나" ? "bg-sky-100 text-sky-600"
-                      : "bg-slate-100 text-slate-500"}`}>
-                  {senderName[0]}
-                </div>
-                <div className={`max-w-[75%] flex flex-col gap-0.5 ${m.role === "강사" || m.role === "나" ? "items-end" : "items-start"}`}>
-                  {editingId === (m.id || i) ? (
-                    <div className="flex flex-col gap-1 items-end w-full">
-                      <textarea value={editMsg} onChange={e => setEditMsg(e.target.value)}
-                        className="w-full min-w-[200px] px-3 py-2 text-sm bg-white border border-violet-300 rounded-xl outline-none resize-none" rows={2} />
-                      <div className="flex gap-1 mt-1">
-                        <button onClick={() => setEditingId(null)} className="text-xs px-2 py-1 text-slate-400 hover:text-slate-600 font-semibold">취소</button>
-                        <button onClick={saveEdit} className="text-xs px-2 py-1 bg-violet-500 text-white rounded hover:bg-violet-600 font-semibold">저장</button>
+                      : m.role === "참여자" || m.role === "나" ? "bg-sky-100 text-sky-600"
+                        : "bg-slate-100 text-slate-500"}`}>
+                    {senderName[0]}
+                  </div>
+                  <div className={`max-w-[75%] flex flex-col gap-0.5 ${m.role === "강사" || m.role === "나" ? "items-end" : "items-start"}`}>
+                    {editingId === (m.id || i) ? (
+                      <div className="flex flex-col gap-1 items-end w-full">
+                        <textarea value={editMsg} onChange={e => setEditMsg(e.target.value)}
+                          className="w-full min-w-[200px] px-3 py-2 text-sm bg-white border border-violet-300 rounded-xl outline-none resize-none" rows={2} />
+                        <div className="flex gap-1 mt-1">
+                          <button onClick={() => setEditingId(null)} className="text-xs px-2 py-1 text-slate-400 hover:text-slate-600 font-semibold">취소</button>
+                          <button onClick={saveEdit} className="text-xs px-2 py-1 bg-violet-500 text-white rounded hover:bg-violet-600 font-semibold">저장</button>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className={`flex items-end gap-1.5 ${m.role === "강사" || m.role === "나" ? "flex-row-reverse" : "flex-row"}`}>
-                      <div className={`group relative px-3 py-2 rounded-2xl text-sm leading-relaxed
+                    ) : (
+                      <div className={`flex items-end gap-1.5 ${m.role === "강사" || m.role === "나" ? "flex-row-reverse" : "flex-row"}`}>
+                        <div className={`group relative px-3 py-2 rounded-2xl text-sm leading-relaxed
                         ${m.role === "강사" || m.role === "나"
-                          ? "bg-sky-500 text-white rounded-tr-sm"
-                          : "bg-slate-100 text-slate-700 rounded-tl-sm"}`}>
-                        {m.text}
+                            ? "bg-sky-500 text-white rounded-tr-sm"
+                            : "bg-slate-100 text-slate-700 rounded-tl-sm"}`}>
+                          {m.text}
 
-                        {canEdit && (
-                          <div className={`absolute top-0 flex gap-1 bg-white/90 backdrop-blur shadow-sm border border-slate-100 rounded-lg px-2 py-1.5 
+                          {canEdit && (
+                            <div className={`absolute top-0 flex gap-1 bg-white/90 backdrop-blur shadow-sm border border-slate-100 rounded-lg px-2 py-1.5 
                             opacity-0 group-hover:opacity-100 transition-opacity z-10
                             ${m.role === "강사" || m.role === "나" ? "right-full mr-1 -mt-1" : "left-full ml-1 -mt-1"}`}>
-                            <button onClick={() => { setEditingId(m.id || i); setEditMsg(m.text); }} className="text-[11px] font-bold text-slate-500 hover:text-sky-500 whitespace-nowrap px-1">수정</button>
-                            <button onClick={() => onDeleteChat(company.id, m.id)} className="text-[11px] font-bold text-slate-500 hover:text-rose-500 whitespace-nowrap px-1 border-l pl-2 ml-1">삭제</button>
-                          </div>
-                        )}
+                              <button onClick={() => { setEditingId(m.id || i); setEditMsg(m.text); }} className="text-[11px] font-bold text-slate-500 hover:text-sky-500 whitespace-nowrap px-1">수정</button>
+                              <button onClick={() => onDeleteChat(company.id, m.id)} className="text-[11px] font-bold text-slate-500 hover:text-rose-500 whitespace-nowrap px-1 border-l pl-2 ml-1">삭제</button>
+                            </div>
+                          )}
+                        </div>
+                        {timeStr && <span className="text-[10px] text-slate-400 shrink-0 mb-1">{timeStr}</span>}
                       </div>
-                      {timeStr && <span className="text-[10px] text-slate-400 shrink-0 mb-1">{timeStr}</span>}
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
-            )
-          })}
-          <div ref={chatEndRef} />
+              )
+            })}
+            <div ref={chatEndRef} />
+          </div>
+          <div className="px-4 py-3 border-t border-slate-100 flex gap-2">
+            <input value={msg} onChange={(e) => setMsg(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && send()} placeholder="메시지 입력..."
+              className="flex-1 px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-50 transition-all" />
+            <button onClick={send}
+              className="px-4 py-2 bg-violet-500 text-white rounded-xl text-sm font-semibold hover:bg-violet-600 transition-colors">
+              전송
+            </button>
+          </div>
         </div>
-        <div className="px-4 py-3 border-t border-slate-100 flex gap-2">
-          <input value={msg} onChange={(e) => setMsg(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()} placeholder="메시지 입력..."
-            className="flex-1 px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-50 transition-all" />
-          <button onClick={send}
-            className="px-4 py-2 bg-violet-500 text-white rounded-xl text-sm font-semibold hover:bg-violet-600 transition-colors">
-            전송
-          </button>
-        </div>
-      </div >
-    </div >
-      </div >
-    </div >
+      </div>
+    </div>
   );
 }
 
