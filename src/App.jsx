@@ -158,6 +158,37 @@ function DeleteCompanyModal({ company, onConfirm, onClose }) {
   );
 }
 
+/* ─── 참여자 삭제 경고 모달 ───────────────────────── */
+function DeleteParticipantModal({ participant, onConfirm, onClose }) {
+  return (
+    <Overlay onClose={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-[420px] p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center text-2xl">⚠️</div>
+          <div>
+            <h3 className="text-base font-bold text-slate-800">참여자 삭제</h3>
+            <p className="text-xs text-slate-400">이 작업은 되돌릴 수 없습니다</p>
+          </div>
+        </div>
+        <div className="bg-rose-50 border border-rose-100 rounded-xl p-4 mb-5 space-y-1">
+          <p className="text-sm text-slate-700">
+            <span className="font-bold text-rose-600">'{participant.name}'</span> 참여자를 삭제합니다.
+          </p>
+          <p className="text-sm text-slate-600 font-semibold text-rose-600 mt-2">
+            참여자의 모든 정보가 사라집니다. 정말 삭제하시겠습니까?
+          </p>
+        </div>
+        <div className="flex gap-2 justify-end">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">취소</button>
+          <button onClick={onConfirm} className="px-5 py-2 text-sm text-white bg-rose-500 rounded-xl hover:bg-rose-600 transition-colors font-semibold flex items-center gap-1.5">
+            🗑 삭제 확인
+          </button>
+        </div>
+      </div>
+    </Overlay>
+  );
+}
+
 /* ─── 과제 추가 모달 ─────────────────────────────── */
 function AddTaskModal({ onAdd, onClose }) {
   const [name, setName] = useState("");
@@ -700,6 +731,7 @@ async function updateParticipantsToGoogleSheets(companies, setExporting) {
 function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAddCompany, onDeleteCompany, onDeleteParticipant, onUpdateSchedule }) {
   const [showAdd, setShowAdd] = useState(false);
   const [delTarget, setDelTarget] = useState(null);
+  const [delParticipantTarget, setDelParticipantTarget] = useState(null);
   const [schedTarget, setSchedTarget] = useState(null);
   const [isExportingParticipants, setIsExportingParticipants] = useState(false);
   const all = companies.flatMap((c) => c.participants.map((p) => ({ ...p, companyName: c.name, companyId: c.id })));
@@ -712,6 +744,11 @@ function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAdd
         <DeleteCompanyModal company={delTarget}
           onConfirm={() => { onDeleteCompany(delTarget.id); setDelTarget(null); }}
           onClose={() => setDelTarget(null)} />
+      )}
+      {delParticipantTarget && (
+        <DeleteParticipantModal participant={delParticipantTarget}
+          onConfirm={() => { onDeleteParticipant(delParticipantTarget.companyId, delParticipantTarget.id); setDelParticipantTarget(null); }}
+          onClose={() => setDelParticipantTarget(null)} />
       )}
       {schedTarget && (
         <ScheduleEditModal company={schedTarget}
@@ -824,7 +861,7 @@ function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAdd
                         className="px-2.5 py-1 bg-violet-50 text-violet-600 rounded-lg text-xs font-semibold hover:bg-violet-100 transition-colors">
                         📑 수정
                       </button>
-                      <button onClick={() => onDeleteParticipant(p.companyId, p.id)}
+                      <button onClick={() => setDelParticipantTarget(p)}
                         className="px-2.5 py-1 bg-rose-50 text-rose-500 rounded-lg text-xs font-semibold hover:bg-rose-100 transition-colors">
                         ❌ 삭제
                       </button>
