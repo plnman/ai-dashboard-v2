@@ -961,7 +961,6 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
                     {senderName[0]}
                   </div>
                   <div className={`max-w-[75%] flex flex-col gap-0.5 ${m.role === "강사" || m.role === "나" ? "items-end" : "items-start"}`}>
-                    <span className="text-xs text-slate-400 font-medium">{senderName}</span>
                     {editingId === (m.id || i) ? (
                       <div className="flex flex-col gap-1 items-end w-full">
                         <textarea value={editMsg} onChange={e => setEditMsg(e.target.value)}
