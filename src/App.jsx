@@ -1059,9 +1059,9 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
                               {m.text}
 
                               {/* Hover Actions */}
-                              <div className={`absolute top-0 flex gap-1 bg-white/90 backdrop-blur shadow-sm border border-slate-100 rounded-lg px-2 py-1.5 
+                              <div className={`absolute -top-3 flex gap-1 bg-white/95 backdrop-blur shadow-sm border border-slate-200 rounded-lg px-2 py-1.5 
                               opacity-0 group-hover:opacity-100 transition-opacity z-10
-                              ${m.role === "강사" || m.role === "나" ? "right-full mr-1 -mt-1" : "left-full ml-1 -mt-1"}`}>
+                              ${m.role === "강사" || m.role === "나" ? "right-3" : "left-3"}`}>
                                 <button onClick={() => { setReplyingToId(m.id || i); setReplyMsg(""); }} className="text-[11px] font-bold text-slate-500 hover:text-emerald-500 whitespace-nowrap px-1">답글</button>
                                 {canEdit && (
                                   <>
@@ -1122,9 +1122,9 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
                                   ${r.role === "강사" || r.role === "나" ? "bg-indigo-100 text-indigo-900 rounded-tr-sm" : "bg-slate-100 text-slate-700 rounded-tl-sm"}`}>
                                       {r.text}
                                       {rCanEdit && (
-                                        <div className={`absolute top-0 flex gap-1 bg-white/90 backdrop-blur shadow-sm border border-slate-100 rounded-md px-1.5 py-1 
+                                        <div className={`absolute -top-3 flex gap-1 bg-white/95 backdrop-blur shadow-sm border border-slate-200 rounded-md px-1.5 py-1 
                                         opacity-0 group-hover:opacity-100 transition-opacity z-10
-                                        ${r.role === "강사" || r.role === "나" ? "right-full mr-1 -mt-1" : "left-full ml-1 -mt-1"}`}>
+                                        ${r.role === "강사" || r.role === "나" ? "right-2" : "left-2"}`}>
                                           <button onClick={() => { setEditingId(rEditId); setEditMsg(r.text); }} className="text-[10px] font-bold text-slate-500 hover:text-sky-500 whitespace-nowrap px-1">수정</button>
                                           <button onClick={() => onDeleteReply(company.id, m.id, r.id)} className="text-[10px] font-bold text-slate-500 hover:text-rose-500 whitespace-nowrap px-1 border-l pl-1 ml-1">삭제</button>
                                         </div>
