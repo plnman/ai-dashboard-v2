@@ -586,7 +586,7 @@ function StatCard({ label, value, icon, gradient }) {
 /* ═══════════════════════════════════════════════════
    TAB 1 — 강사 관제 센터 (관리자 전용)
 ═══════════════════════════════════════════════════ */
-const GAS_URL = "https://script.google.com/macros/s/AKfycbxbH0j4s3mWb4glf1Ml6XYOyZ_a5qQyljVdGGV7VwwUNwaeSnurbBG53uTX7Fqz5c4/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbyRaQiojEbWYSwE9MYeST-5XX03-QMzKBl_iLi4EbcLqg7W33pILcewTZ0xN6j-lvw/exec";
 
 async function publishReportToGoogleSheets(companies, targetWeek, setExporting, adminMemo = "") {
   setExporting(true);
