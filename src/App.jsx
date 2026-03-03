@@ -108,7 +108,7 @@ function AddCompanyModal({ onAdd, onClose }) {
   const handle = () => { if (!name.trim()) return; onAdd(name.trim()); onClose(); };
   return (
     <Overlay onClose={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-96 p-6">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
         <div className="flex items-center gap-3 mb-5">
           <div className="w-9 h-9 bg-violet-100 rounded-xl flex items-center justify-center text-lg">🏢</div>
           <h3 className="text-base font-bold text-slate-800">신규 업체 추가</h3>
@@ -130,7 +130,7 @@ function AddCompanyModal({ onAdd, onClose }) {
 function DeleteCompanyModal({ company, onConfirm, onClose }) {
   return (
     <Overlay onClose={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-[420px] p-6">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[420px] mx-4 p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center text-2xl">⚠️</div>
           <div>
@@ -162,7 +162,7 @@ function DeleteCompanyModal({ company, onConfirm, onClose }) {
 function DeleteParticipantModal({ participant, onConfirm, onClose }) {
   return (
     <Overlay onClose={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-[420px] p-6">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[420px] mx-4 p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center text-2xl">⚠️</div>
           <div>
@@ -195,7 +195,7 @@ function AddTaskModal({ onAdd, onClose }) {
   const handle = () => { if (!name.trim()) return; onAdd(name.trim()); onClose(); };
   return (
     <Overlay onClose={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-96 p-6">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
         <div className="flex items-center gap-3 mb-5">
           <div className="w-9 h-9 bg-emerald-100 rounded-xl flex items-center justify-center text-lg">🛠️</div>
           <h3 className="text-base font-bold text-slate-800">과제 추가</h3>
@@ -225,7 +225,7 @@ function AddParticipantModal({ onAdd, onClose }) {
   };
   return (
     <Overlay onClose={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-[440px] p-6">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[440px] mx-4 p-6">
         <div className="flex items-center gap-3 mb-5">
           <div className="w-9 h-9 bg-sky-100 rounded-xl flex items-center justify-center text-lg">👤</div>
           <div>
@@ -280,7 +280,7 @@ function ScheduleEditModal({ company, onSave, onClose }) {
 
   return (
     <Overlay onClose={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-[460px] p-6">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[460px] mx-4 p-6">
         <div className="flex items-center gap-3 mb-5">
           <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-xl">📅</div>
           <div>
@@ -415,7 +415,7 @@ function LoginScreen({ companies, onLogin, onRegister }) {
                   {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-2">이름</label>
                   <input type="text" value={pForm.name} onChange={(e) => setPForm({ ...pForm, name: e.target.value })}
@@ -480,9 +480,9 @@ function ReportModal({ company, onClose }) {
 
   return (
     <Overlay onClose={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-[720px] max-h-[88vh] flex flex-col">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[88vh] flex flex-col">
         {/* 헤더 */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+        <div className="px-6 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-base font-bold text-slate-800">📋 {company.name} — AI 주간 레포트</h3>
@@ -670,6 +670,7 @@ async function publishReportToGoogleSheets(companies, targetWeek, setExporting, 
     });
 
     const payload = {
+      action: "publishReport",
       week: targetWeek,
       reports: reports
     };
@@ -755,7 +756,7 @@ function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAdd
           onSave={(sched) => { onUpdateSchedule(schedTarget.id, sched); setSchedTarget(null); }}
           onClose={() => setSchedTarget(null)} />
       )}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard label="총 업체 수" value={companies.length} icon="🏢" gradient="from-violet-400 to-purple-500" />
         <StatCard label="총 참여자" value={all.length} icon="👤" gradient="from-sky-400 to-blue-500" />
         <StatCard label="평균 진척도" value={`${totalAvg}%`} icon="📊" gradient="from-emerald-400 to-teal-500" />
@@ -766,7 +767,7 @@ function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAdd
         <div className="px-6 py-4 border-b border-slate-100">
           <h2 className="text-sm font-bold text-slate-700">📅 업체별 프로젝트 일정 관리</h2>
         </div>
-        <div className="grid grid-cols-2 gap-0 divide-x divide-slate-100">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-0 md:divide-x md:divide-y-0 divide-y divide-slate-100">
           {companies.map((c) => {
             const sc = c.schedule || {};
             const hasSchedule = sc.startDate && sc.endDate;
@@ -801,7 +802,7 @@ function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAdd
         </div>
       </div>
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h2 className="text-sm font-bold text-slate-700">🛰️ 전사 실습 현황 모니터링</h2>
           <div className="flex items-center gap-2">
             <button
@@ -922,7 +923,7 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
       )}
 
       {/* 업체 헤더 */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 bg-gradient-to-br from-sky-400 to-blue-500 rounded-xl flex items-center justify-center text-white text-xl shadow-sm">🏢</div>
           <div>
@@ -939,9 +940,9 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* 참여자 목록 */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col h-[600px] overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col h-[500px] lg:h-[600px] overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
             <h3 className="text-sm font-bold text-slate-700">👥 참여자 현황</h3>
             <button onClick={() => setShowAddParticipant(true)}
@@ -1119,23 +1120,25 @@ function PersonalDashboard({ participant, companyName, schedule, isAdmin, isMine
       )}
 
       {/* 헤더 카드 */}
-      <div className="bg-gradient-to-r from-violet-500 via-indigo-500 to-blue-500 rounded-2xl p-5 text-white flex items-center justify-between shadow-md">
+      <div className="bg-gradient-to-r from-violet-500 via-indigo-500 to-blue-500 rounded-2xl p-5 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md">
         <div>
           <div className="text-xs opacity-70 mb-0.5">{companyName} · {participant.dept}</div>
           <div className="text-2xl font-extrabold">{participant.name}</div>
           <div className="text-xs opacity-60 mt-1">{participant.email}</div>
         </div>
-        <div className="text-right">
-          <div className="text-5xl font-black">{actualPct}%</div>
-          <div className="text-xs opacity-70">전체 진척도</div>
+        <div className="flex sm:block items-end justify-between w-full sm:w-auto text-left sm:text-right">
+          <div>
+            <div className="text-5xl font-black">{actualPct}%</div>
+            <div className="text-xs opacity-70">전체 진척도</div>
+          </div>
           {isMine ? (
             <select value={participant.status} onChange={(e) => saveStatus(e.target.value)}
-              className="mt-2 px-3 py-1 bg-white/20 text-white text-xs font-semibold rounded-full border border-white/30 outline-none cursor-pointer backdrop-blur">
+              className="mt-2 sm:mt-2 px-3 py-1 bg-white/20 text-white text-xs font-semibold rounded-full border border-white/30 outline-none cursor-pointer backdrop-blur">
               <option value="정상" className="text-slate-800">🟢 정상 진행</option>
               <option value="정체" className="text-slate-800">⚠️ 실적 정체</option>
             </select>
           ) : (
-            <div className="mt-2 px-3 py-1 bg-white/20 text-white text-xs font-semibold rounded-full border border-white/30 inline-block backdrop-blur">
+            <div className="mt-2 sm:mt-2 px-3 py-1 bg-white/20 text-white text-xs font-semibold rounded-full border border-white/30 inline-block backdrop-blur">
               {participant.status === "정상" ? "🟢 정상 진행" : "⚠️ 실적 정체"}
             </div>
           )}
@@ -1152,10 +1155,10 @@ function PersonalDashboard({ participant, companyName, schedule, isAdmin, isMine
             </span>
           </div>
           {/* 타임라인 마일스톤 */}
-          <div className="flex items-center gap-1 mb-4 text-xs">
+          <div className="flex items-center gap-1 mb-4 text-xs overflow-x-auto whitespace-nowrap" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             <span className="text-emerald-600 font-semibold">🚀 {sc.startDate}</span>
-            <div className="flex-1 border-t-2 border-dashed border-slate-200 mx-2" />
-            {sc.kickoffDate && <><span className="text-amber-600 font-semibold">🎯 {sc.kickoffDate}</span><div className="flex-1 border-t-2 border-dashed border-slate-200 mx-2" /></>}
+            <div className="flex-1 border-t-2 border-dashed border-slate-200 mx-2 min-w-[20px]" />
+            {sc.kickoffDate && <><span className="text-amber-600 font-semibold">🎯 {sc.kickoffDate}</span><div className="flex-1 border-t-2 border-dashed border-slate-200 mx-2 min-w-[20px]" /></>}
             <span className="text-rose-600 font-semibold">🏁 {sc.endDate}</span>
           </div>
           {/* 목표 진척도 바 */}
@@ -1490,7 +1493,7 @@ export default function App() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/30 to-sky-50/40">
       {/* 헤더 */}
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-gradient-to-br from-violet-500 to-indigo-600 rounded-xl flex items-center justify-center text-white font-extrabold text-sm shadow-sm">AI</div>
             <div>
@@ -1528,7 +1531,7 @@ export default function App() {
           </div>
         </div>
         {/* 탭 */}
-        <div className="max-w-6xl mx-auto px-6 flex gap-0.5">
+        <div className="max-w-6xl mx-auto px-6 flex gap-0.5 overflow-x-auto whitespace-nowrap" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {tabs.map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`px-4 py-2.5 text-sm font-semibold rounded-t-xl transition-all border-b-2
