@@ -1,46 +1,32 @@
 rules_version = '2';
 
-// AI 대시보드 Firestore 보안 규칙
-//
-// ⚠️ 이 Firebase 프로젝트(aidash-d831b)는 여러 앱이 함께 씁니다.
-//    udb / signals / trades / portfolio / daily / holdings / config 는 다른 앱의 컬렉션이며
-//    2026-09-08 시점의 운영 규칙을 그대로 옮겨 둔 것입니다. 건드리지 마세요.
-//    이 파일에서 새로 손댄 부분은 dashboard 뿐입니다.
+// AI 대시보드 Firestore 보안 규칙 (프로젝트 aidash-d831b)
 //
 // 배포:  firebase deploy --only firestore:rules
 // 또는:  Firebase 콘솔 → Firestore Database → 규칙 탭에 붙여넣기
 //
 // ─────────────────────────────────────────────────────────────
 // Firestore 규칙은 OR 로 동작합니다. 어느 한 match 가 허용하면 통과합니다.
-// 따라서 `allow ...: if false` 를 덧붙여도 다른 match 의 허용을 취소하지 못합니다.
+// 따라서 allow ...: if false 를 덧붙여도 다른 match 의 허용을 취소하지 못합니다.
 // 무언가를 실제로 막으려면 그것을 허용하던 match 를 지우거나 좁혀야 합니다.
-// ─────────────────────────────────────────────────────────────
 //
-// App Check 2단계 (선택)
-//   Firebase 콘솔 → App Check 에서 reCAPTCHA v3 로 웹 앱을 등록하고,
-//   사이트 키를 .env 의 VITE_RECAPTCHA_SITE_KEY 에 넣어 배포한 뒤,
-//   Firestore 에 대해 '적용(enforce)'을 켭니다.
-//   그 다음 아래 dashboard 블록의 조건에 `request.app != null &&` 를 덧붙이면
+// 2026-09-08 정리:
+//   udb / signals / trades / portfolio / daily / holdings / config 규칙을 제거했습니다.
+//   SMARTSWING_NH 앱이 쓰던 자리인데 전부 문서 0개였고, 해당 앱은 더 이상 쓰지 않습니다.
+//   config/github 에 있던 GitHub PAT(2026-04-21 만료)도 함께 삭제했습니다.
+//   이제 이 프로젝트에서 쓰는 경로는 dashboard 뿐입니다.
+//
+// App Check (다음 단계)
+//   콘솔 → App Check 에서 reCAPTCHA v3 로 웹 앱을 등록하고, 사이트 키를
+//   .env 의 VITE_RECAPTCHA_SITE_KEY 에 넣어 배포한 뒤 Firestore 적용을 켭니다.
+//   그 다음 아래 조건들에 `request.app != null &&` 를 덧붙이면
 //   배포된 앱에서 온 요청만 통과합니다.
 //   ⚠️ 순서를 지키세요. 적용을 켜기 전에 조건을 켜면 앱이 즉시 멈춥니다.
+// ─────────────────────────────────────────────────────────────
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── 다른 앱들 (기존 운영 규칙 그대로 보존) ──────────────
-    match /udb/{doc}       { allow read: if true; allow write: if false; }
-    match /signals/{doc}   { allow read: if true; allow write: if false; }
-    match /trades/{doc}    { allow read, write: if true; }
-    match /portfolio/{doc} { allow read: if true; allow write: if false; }
-    match /daily/{doc}     { allow read: if true; allow write: if true; }
-    match /config/{doc}    { allow read, write: if true; }
-    match /holdings/{doc}  { allow read, write: if true; }
-    // ⚠️ config/github 문서에 GitHub PAT 가 평문으로 들어 있고 위 규칙 때문에
-    //    누구나 읽을 수 있습니다. 토큰을 폐기하고 서버 측 비밀 저장소로 옮긴 뒤
-    //    이 match 를 좁히거나 삭제해야 합니다. 여기서는 다른 앱을 깨지 않으려고 그대로 뒀습니다.
-
-    // ── AI 대시보드 ────────────────────────────────────────
-    // 이전에는 `match /dashboard/{doc} { allow read, write: if true; }` 하나였습니다.
     match /dashboard/data {
       allow read: if true;
 
