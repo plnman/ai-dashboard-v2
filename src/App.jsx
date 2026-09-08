@@ -719,7 +719,7 @@ function LoginScreen({ companies, onLogin, onRegister, adminAuth }) {
     const existing = c?.participants.find(p => p.name === pForm.name.trim() && p.email === pForm.email.trim());
 
     if (existing) {
-      onLogin({ role: "participant", id: existing.id });
+      onLogin({ role: "participant", id: existing.id, cid: pForm.cid });
     } else {
       if (!showRegister) {
         setShowRegister(true);
@@ -740,7 +740,8 @@ function LoginScreen({ companies, onLogin, onRegister, adminAuth }) {
           setPErr(`등록에 실패했습니다. ${res.error?.message || "잠시 후 다시 시도해 주세요."}`);
           return;
         }
-        onLogin({ role: "participant", id: newId });
+        // 방금 고른 업체 id 를 함께 넘긴다. App 쪽 companies 가 아직 갱신 전일 수 있다.
+        onLogin({ role: "participant", id: newId, cid: pForm.cid });
       }
     }
   };
@@ -1924,8 +1925,17 @@ export default function App() {
   });
   const [participantId, setParticipantId] = useState(null);
 
-  // 저장된 업체 id가 비었거나 더 이상 존재하지 않으면 첫 업체로 떨어진다(상태 동기화 없이 파생).
-  const selectedCompany = companies.find((c) => c.id === companyId) || companies[0];
+  // 참여자는 소속 업체를 바꿀 수 없다(업체 칩도 관리자만 눌린다).
+  // 그러니 companyId 상태를 거치지 말고 본인 소속에서 곧바로 파생한다.
+  // 예전에는 로그인 시점에 setCompanyId 로 맞춰줬는데, 신규 등록 직후에는
+  // handleLogin 이 등록 이전의 companies 를 붙들고 있어 본인 업체를 못 찾았고,
+  // 그대로 companies[0](파워넷사) 허브가 열렸다.
+  const myCompany = myParticipantId
+    ? companies.find((c) => c.participants.some((p) => p.id === myParticipantId)) : null;
+
+  // 관리자용: 저장된 업체 id가 비었거나 더 이상 없으면 첫 업체로 떨어진다.
+  const adminSelectedCompany = companies.find((c) => c.id === companyId) || companies[0];
+  const selectedCompany = myParticipantId ? myCompany : adminSelectedCompany;
   const effectiveCompanyId = selectedCompany?.id || "";
 
   useEffect(() => {
@@ -2102,10 +2112,8 @@ export default function App() {
     if (!res.ok) throw res.error || new Error("복구에 실패했습니다.");
   };
 
-  // 참여자 본인 정보 파생
+  // 참여자 본인 정보 파생 (myCompany 는 selectedCompany 계산에 필요해 위에서 이미 구했다)
   const myParticipant = myParticipantId ? allParticipants.find((p) => p.id === myParticipantId) : null;
-  const myCompany = myParticipantId
-    ? companies.find((c) => c.participants.some((p) => p.id === myParticipantId)) : null;
 
   // 로그인
   const handleLogin = (auth) => {
@@ -2115,9 +2123,15 @@ export default function App() {
       // 기본 비밀번호로 들어온 경우 즉시 변경을 유도한다.
       if (auth.needsPasswordSetup) setShowPassword(true);
     } else {
-      const c = companies.find((co) => co.participants.some((p) => p.id === auth.id));
       setParticipantId(auth.id);
-      if (c) setCompanyId(c.id);
+      // 소속 업체는 selectedCompany 가 본인 기준으로 파생하므로 여기서 맞출 필요가 없다.
+      // 로그아웃 후 관리자로 들어올 때를 위해 companyId 만 참고용으로 갱신한다.
+      // companies 상태 대신 ref 를 쓴다. 신규 등록 직후에는 이 클로저의 companies 가
+      // 아직 방금 등록한 참여자를 담고 있지 않다.
+      const cid = auth.cid || companiesRef.current.find(
+        (co) => co.participants.some((p) => p.id === auth.id)
+      )?.id;
+      if (cid) setCompanyId(cid);
       setTab("company");
     }
   };
