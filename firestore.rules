@@ -50,13 +50,11 @@ service cloud.firestore {
       allow create: if false;
       allow delete: if false;
 
-      allow update:
-        // companies 외의 필드가 끼어들지 못하게 한다
-        request.resource.data.keys().hasOnly(['companies'])
+      // companies 외의 필드가 끼어들지 못하게 하고,
+      // 업체가 한 번에 2개 이상 사라지는 저장은 거부한다. 정상적인 1개씩 삭제는 통과.
+      allow update: if request.resource.data.keys().hasOnly(['companies'])
         && request.resource.data.companies is list
         && request.resource.data.companies.size() > 0
-        // 업체가 한 번에 2개 이상 사라지는 저장은 거부.
-        // 정상적인 업체 삭제(1개씩)는 통과한다.
         && request.resource.data.companies.size() >= resource.data.companies.size() - 1;
     }
 
