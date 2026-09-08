@@ -1,68 +1,142 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "./firebase";
-import { doc, setDoc, onSnapshot } from "firebase/firestore";
+import { doc, setDoc, getDoc, onSnapshot, runTransaction } from "firebase/firestore";
 
 /* ═══════════════════════════════════════════════════
    초기 데이터
 ═══════════════════════════════════════════════════ */
 const uid = () => "u_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2, 8);
 
-const INIT = [
-  {
-    id: "c1",
-    name: "파워넷사",
-    participants: [
-      {
-        id: "p1", name: "김철수", email: "ks@powernet.com", dept: "DX 추진팀", status: "정상",
-        tasks: [
-          { id: "t1", name: "딥러닝 경량화", progress: 75, delta: 10 },
-          { id: "t2", name: "비전 검사 자동화", progress: 80, delta: 5 },
-        ],
-        summary: "양자화 기법을 적용하여 정확도 손실을 2% 이내로 방어하며 추론 속도를 개선했습니다.",
-        nextWeekPlan: "엣지 디바이스 환경 최적화 테스트를 진행할 예정입니다.",
-        instructorMemo: "기법 적용이 매우 우수함",
-      },
-      {
-        id: "p2", name: "박민준", email: "mj@powernet.com", dept: "AI 연구소", status: "정상",
-        tasks: [
-          { id: "t3", name: "모델 배포 파이프라인", progress: 60, delta: 15 },
-        ],
-        summary: "CI/CD 파이프라인 구축 완료. 다음 주 프로덕션 배포 예정.",
-        aiReport: "배포 파이프라인 구축이 체계적으로 진행되고 있습니다. 모니터링 지표 설계를 병행하시길 권장합니다.",
-        instructorMemo: "일정 준수 우수",
-      },
-    ],
-    chat: [{ id: uid(), role: "강사", text: "소통창입니다.", createdAt: new Date().toISOString() }],
-    schedule: { startDate: "2026-01-06", kickoffDate: "2026-02-03", endDate: "2026-06-30" },
-  },
-  {
-    id: "c2",
-    name: "대덕전자",
-    participants: [
-      {
-        id: "p3", name: "이영희", email: "yh@daedeok.com", dept: "생산기술부", status: "정체",
-        tasks: [
-          { id: "t4", name: "AOI 최적화", progress: 40, delta: 0 },
-          { id: "t5", name: "수요예측 고도화", progress: 20, delta: -5 },
-        ],
-        summary: "병목 현상으로 전처리 단계 진척이 멈춘 상태. 샘플링 전략 재검토 중.",
-        aiReport: "데이터 샘플링 불균형으로 모델 성능이 정체 구간입니다. SMOTE 또는 언더샘플링 전략을 적극 검토하시기 바랍니다.",
-        instructorMemo: "데이터 샘플링 재점검 요망",
-      },
-      {
-        id: "p4", name: "최준호", email: "jh@daedeok.com", dept: "품질관리팀", status: "정상",
-        tasks: [
-          { id: "t6", name: "불량 예측 모델", progress: 55, delta: 8 },
-        ],
-        summary: "불량 패턴 분류 모델 초안 완성. 검증 단계 진입.",
-        aiReport: "초기 정확도가 양호합니다. 실제 생산 환경 데이터로 검증을 진행하면 더 신뢰할 수 있는 성능 지표를 얻을 수 있습니다.",
-        instructorMemo: "검증 데이터 다양성 확보 필요",
-      },
-    ],
-    chat: [{ id: uid(), role: "강사", text: "소통창입니다.", createdAt: new Date().toISOString() }],
-    schedule: { startDate: "2026-01-13", kickoffDate: "2026-02-10", endDate: "2026-07-07" },
-  },
-];
+// ⚠️ 초기 시드 데이터(INIT)는 의도적으로 제거되었습니다.
+// 2026-09-07, 오프라인 상태로 앱을 연 브라우저가 "문서 없음" 스냅샷을 받고 이 배열을
+// 운영 DB에 덮어써서 전체 데이터가 소실되었습니다. 클라이언트는 어떤 경우에도
+// 대시보드 문서를 새로 만들지 않습니다. 최초 생성은 관리 콘솔에서만 수행하세요.
+
+const DATA_DOC = ["dashboard", "data"];
+const CONFIG_DOC = ["dashboard", "config"];
+
+// 레거시 비밀번호. config 문서가 아직 없는 환경에서만 1회 통용되며,
+// 관리자가 비밀번호를 변경하는 순간 무효가 됩니다.
+const LEGACY_ADMIN_PWD = "admin1234";
+
+const countParticipants = (cs) =>
+  (cs || []).reduce((s, c) => s + (c.participants?.length || 0), 0);
+
+// 비밀번호는 PBKDF2-SHA256 + 무작위 솔트로 유도한다.
+// config 문서는 클라이언트가 읽어야 검증이 되므로 해시가 노출된다.
+// 단순 SHA-256이면 레인보우 테이블로 즉시 역산되지만, 솔트와 반복 횟수가 있으면
+// 쓸만한 비밀번호에 대해 대입 비용이 실질적으로 커진다.
+const PBKDF2_ITERATIONS = 310000;
+
+const toHex = (buf) =>
+  Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+
+const fromHex = (hex) =>
+  new Uint8Array((hex.match(/.{1,2}/g) || []).map((h) => parseInt(h, 16)));
+
+function requireCrypto() {
+  if (!globalThis.crypto?.subtle) {
+    throw new Error("이 브라우저에서는 암호화 기능을 쓸 수 없습니다. https 주소로 접속해 주세요.");
+  }
+}
+
+async function derivePassword(password, saltHex, iterations = PBKDF2_ITERATIONS) {
+  requireCrypto();
+  const key = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt: fromHex(saltHex), iterations, hash: "SHA-256" }, key, 256
+  );
+  return toHex(bits);
+}
+
+function newSaltHex() {
+  requireCrypto();
+  return toHex(crypto.getRandomValues(new Uint8Array(16)));
+}
+
+// 길이가 같은 문자열의 상수 시간 비교 (타이밍 차이로 정보가 새지 않도록)
+function safeEqual(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+// adminAuth: { hash, salt, iterations } 또는 null(아직 미설정)
+async function verifyAdminPassword(password, adminAuth) {
+  if (!adminAuth?.hash || !adminAuth?.salt) return password === LEGACY_ADMIN_PWD;
+  const derived = await derivePassword(password, adminAuth.salt, adminAuth.iterations || PBKDF2_ITERATIONS);
+  return safeEqual(derived, adminAuth.hash);
+}
+
+/* ─── 계정 백업(참여자 명단 전용) ─────────────────── */
+const BACKUP_VERSION = 1;
+const LOCAL_SNAPSHOT_KEY = "ai-dashboard-roster-snapshots";
+const LOCAL_SNAPSHOT_MAX = 5;
+
+// 과제/진척도/요약/채팅은 제외하고 계정 복구에 필요한 것만 담는다.
+const buildRosterBackup = (companies) => ({
+  version: BACKUP_VERSION,
+  exportedAt: new Date().toISOString(),
+  companies: (companies || []).map((c) => ({
+    id: c.id,
+    name: c.name,
+    schedule: c.schedule || null,
+    participants: (c.participants || []).map((p) => ({
+      id: p.id, name: p.name, dept: p.dept || "", email: p.email || "",
+    })),
+  })),
+});
+
+const parseRosterBackup = (raw) => {
+  const data = typeof raw === "string" ? JSON.parse(raw) : raw;
+  if (!data || !Array.isArray(data.companies)) {
+    throw new Error("백업 파일 형식이 올바르지 않습니다. (companies 배열 없음)");
+  }
+  return data;
+};
+
+// 백업 ↔ 현재 데이터 비교. 실제 반영 전에 무엇이 추가되는지 보여주기 위한 것.
+const diffRosterBackup = (backup, companies) => {
+  const newCompanies = [];
+  const newParticipants = [];
+  let existing = 0;
+
+  for (const bc of backup.companies) {
+    const target = companies.find((c) => c.id === bc.id) || companies.find((c) => c.name === bc.name);
+    if (!target) newCompanies.push(bc.name);
+    for (const bp of bc.participants || []) {
+      const dup = target?.participants?.some(
+        (p) => p.id === bp.id || (p.name === bp.name && p.email === bp.email)
+      );
+      if (dup) existing++;
+      else newParticipants.push({ company: bc.name, name: bp.name, dept: bp.dept, email: bp.email });
+    }
+  }
+  return { newCompanies, newParticipants, existing };
+};
+
+const readLocalSnapshots = () => {
+  try {
+    const raw = localStorage.getItem(LOCAL_SNAPSHOT_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch { return []; }
+};
+
+const writeLocalSnapshot = (companies) => {
+  try {
+    if (countParticipants(companies) === 0) return;
+    const snap = buildRosterBackup(companies);
+    const list = readLocalSnapshots();
+    const last = list[0];
+    // 명단이 그대로면 중복 저장하지 않는다.
+    if (last && JSON.stringify(last.companies) === JSON.stringify(snap.companies)) return;
+    localStorage.setItem(LOCAL_SNAPSHOT_KEY, JSON.stringify([snap, ...list].slice(0, LOCAL_SNAPSHOT_MAX)));
+  } catch { /* 저장 실패는 무시 — 보조 수단일 뿐 */ }
+};
 
 /* ═══════════════════════════════════════════════════
    유틸
@@ -313,29 +387,328 @@ function ScheduleEditModal({ company, onSave, onClose }) {
   );
 }
 
+/* ─── 관리자 비밀번호 변경 모달 ───────────────────── */
+function AdminPasswordModal({ adminAuth, onSaved, onClose }) {
+  const [cur, setCur] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setErr("");
+    if (next.length < 8) return setErr("새 비밀번호는 8자 이상이어야 합니다.");
+    if (next !== confirm) return setErr("새 비밀번호가 일치하지 않습니다.");
+    if (next === LEGACY_ADMIN_PWD) return setErr("기본 비밀번호는 사용할 수 없습니다.");
+
+    setBusy(true);
+    try {
+      const ok = await verifyAdminPassword(cur, adminAuth);
+      if (!ok) { setErr("현재 비밀번호가 올바르지 않습니다."); return; }
+
+      const salt = newSaltHex();
+      const hash = await derivePassword(next, salt, PBKDF2_ITERATIONS);
+      const record = { hash, salt, iterations: PBKDF2_ITERATIONS };
+
+      // config는 companies와 별도 문서라 명단 저장 가드의 영향을 받지 않는다.
+      await setDoc(doc(db, ...CONFIG_DOC), {
+        adminPasswordHash: hash,
+        adminPasswordSalt: salt,
+        adminPasswordIterations: PBKDF2_ITERATIONS,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      onSaved(record);
+      onClose();
+    } catch (e2) {
+      console.error("[admin-password]", e2);
+      setErr(e2.message || "저장에 실패했습니다. 네트워크를 확인해 주세요.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const field = (label, val, set, autoFocus = false) => (
+    <div>
+      <label className="block text-xs font-bold text-slate-500 mb-1.5">{label}</label>
+      <input type="password" value={val} autoFocus={autoFocus} onChange={(e) => set(e.target.value)}
+        className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all" />
+    </div>
+  );
+
+  return (
+    <Overlay onClose={onClose}>
+      <form onSubmit={submit} className="bg-white rounded-2xl shadow-2xl w-full max-w-[420px] mx-4 p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center text-xl">🔑</div>
+          <div>
+            <h3 className="text-base font-bold text-slate-800">관리자 비밀번호 변경</h3>
+            <p className="text-xs text-slate-400">모든 관리자 계정에 즉시 적용됩니다</p>
+          </div>
+        </div>
+
+        {!adminAuth?.hash && (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5 leading-relaxed">
+            현재 기본 비밀번호를 쓰고 있습니다. 이 값은 공개 저장소와 배포 번들에 노출되어 있으니 반드시 변경해 주세요.
+          </p>
+        )}
+
+        {field(adminAuth?.hash ? "현재 비밀번호" : "현재 비밀번호 (기본값)", cur, setCur, true)}
+        {field("새 비밀번호 (8자 이상)", next, setNext)}
+        {field("새 비밀번호 확인", confirm, setConfirm)}
+
+        {err && <p className="text-rose-500 text-xs font-bold">{err}</p>}
+
+        <p className="text-[11px] text-slate-400 leading-relaxed">
+          비밀번호는 무작위 솔트를 붙여 PBKDF2-SHA256으로 {PBKDF2_ITERATIONS.toLocaleString()}회 늘려 저장하며
+          평문은 어디에도 남지 않습니다. 검증은 클라이언트에서 이뤄지므로, 외부 접근 차단은
+          Firestore 보안 규칙과 App Check 적용이 함께 필요합니다.
+        </p>
+
+        <div className="flex gap-2 justify-end pt-1">
+          <button type="button" onClick={onClose}
+            className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">취소</button>
+          <button type="submit" disabled={busy}
+            className={`px-5 py-2 text-sm text-white rounded-xl font-semibold transition-colors ${busy ? "bg-slate-300 cursor-not-allowed" : "bg-violet-500 hover:bg-violet-600"}`}>
+            {busy ? "저장 중..." : "변경하기"}
+          </button>
+        </div>
+      </form>
+    </Overlay>
+  );
+}
+
+/* ─── 참여자 계정 백업 / 복구 모달 ────────────────── */
+const stampNow = () => {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+};
+
+const downloadJson = (obj, filename) => {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
+function BackupRestoreModal({ companies, onRestore, onClose }) {
+  const [mode, setMode] = useState("backup"); // "backup" | "restore"
+  const [pending, setPending] = useState(null); // { backup, diff, source }
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const snapshots = readLocalSnapshots();
+  const total = countParticipants(companies);
+
+  const stage = (raw, source) => {
+    setErr("");
+    try {
+      const backup = parseRosterBackup(raw);
+      setPending({ backup, diff: diffRosterBackup(backup, companies), source });
+    } catch (e) {
+      setPending(null);
+      setErr(e.message || "백업 파일을 읽을 수 없습니다.");
+    }
+  };
+
+  const onFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => stage(reader.result, file.name);
+    reader.onerror = () => setErr("파일을 읽지 못했습니다.");
+    reader.readAsText(file, "utf-8");
+    e.target.value = "";
+  };
+
+  const apply = async () => {
+    setBusy(true);
+    try {
+      await onRestore(pending.backup);
+      onClose();
+    } catch (e) {
+      setErr(e.message || "복구에 실패했습니다.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Overlay onClose={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[560px] mx-4 max-h-[86vh] flex flex-col">
+        <div className="px-6 py-4 border-b border-slate-100 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-sky-100 rounded-xl flex items-center justify-center text-xl">💾</div>
+            <div>
+              <h3 className="text-base font-bold text-slate-800">참여자 계정 백업 / 복구</h3>
+              <p className="text-xs text-slate-400">업체·부서·이름·이메일만 저장합니다 (과제·진척도 제외)</p>
+            </div>
+          </div>
+          <div className="flex gap-1 mt-4">
+            {[["backup", "💾 백업"], ["restore", "♻️ 복구"]].map(([id, label]) => (
+              <button key={id} onClick={() => { setMode(id); setErr(""); setPending(null); }}
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-colors ${mode === id ? "bg-sky-500 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="px-6 py-5 overflow-y-auto space-y-4">
+          {err && <p className="text-rose-600 text-xs font-bold bg-rose-50 border border-rose-100 rounded-lg p-2.5">{err}</p>}
+
+          {mode === "backup" && (
+            <>
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm text-slate-600 space-y-1">
+                <p>업체 <b className="text-slate-800">{companies.length}개</b> · 참여자 <b className="text-slate-800">{total}명</b></p>
+                <p className="text-xs text-slate-400">파일을 내려받아 안전한 곳에 보관하세요. 복구 탭에서 그대로 되돌릴 수 있습니다.</p>
+              </div>
+              <button
+                onClick={() => downloadJson(buildRosterBackup(companies), `참여자백업_${stampNow()}.json`)}
+                disabled={total === 0}
+                className={`w-full py-3 rounded-xl font-bold text-sm text-white transition-colors ${total === 0 ? "bg-slate-300 cursor-not-allowed" : "bg-gradient-to-r from-sky-500 to-blue-500 hover:opacity-90"}`}>
+                💾 JSON 파일로 내려받기
+              </button>
+              {snapshots.length > 0 && (
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  이 브라우저에 자동 보관된 스냅샷 {snapshots.length}개가 있습니다. 파일이 없어도 복구 탭에서 되돌릴 수 있습니다.
+                </p>
+              )}
+            </>
+          )}
+
+          {mode === "restore" && !pending && (
+            <>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-2">백업 파일 선택</label>
+                <input type="file" accept="application/json,.json" onChange={onFile}
+                  className="w-full text-sm text-slate-600 file:mr-3 file:px-4 file:py-2 file:rounded-xl file:border-0 file:bg-sky-50 file:text-sky-600 file:font-bold file:text-xs hover:file:bg-sky-100 cursor-pointer" />
+              </div>
+              {snapshots.length > 0 && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-2 mt-2">또는 이 브라우저의 자동 스냅샷</label>
+                  <div className="space-y-1.5">
+                    {snapshots.map((s, i) => (
+                      <button key={i} onClick={() => stage(s, `자동 스냅샷 #${i + 1}`)}
+                        className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-50 hover:bg-sky-50 border border-slate-100 hover:border-sky-200 rounded-xl text-left transition-colors">
+                        <span className="text-xs font-semibold text-slate-600">
+                          {new Date(s.exportedAt).toLocaleString("ko-KR")}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          업체 {s.companies.length} · 참여자 {countParticipants(s.companies)}명
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {mode === "restore" && pending && (
+            <>
+              <div className="bg-sky-50 border border-sky-100 rounded-xl p-4 space-y-1.5">
+                <p className="text-xs text-slate-500">출처: <b className="text-slate-700">{pending.source}</b></p>
+                <p className="text-xs text-slate-500">생성: {new Date(pending.backup.exportedAt).toLocaleString("ko-KR")}</p>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                {[
+                  ["신규 참여자", pending.diff.newParticipants.length, "text-emerald-600"],
+                  ["신규 업체", pending.diff.newCompanies.length, "text-violet-600"],
+                  ["이미 존재", pending.diff.existing, "text-slate-400"],
+                ].map(([label, n, color]) => (
+                  <div key={label} className="bg-white border border-slate-100 rounded-xl py-3">
+                    <div className={`text-xl font-extrabold ${color}`}>{n}</div>
+                    <div className="text-[11px] text-slate-400 font-semibold mt-0.5">{label}</div>
+                  </div>
+                ))}
+              </div>
+
+              <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg p-2.5 leading-relaxed">
+                ✅ <b>추가만</b> 수행합니다. 이미 있는 참여자의 과제·진척도·요약·메모는 전혀 건드리지 않습니다.
+              </p>
+
+              {pending.diff.newParticipants.length > 0 && (
+                <div className="border border-slate-100 rounded-xl overflow-hidden">
+                  <div className="px-4 py-2 bg-slate-50 text-xs font-bold text-slate-500">추가될 참여자</div>
+                  <div className="max-h-52 overflow-y-auto divide-y divide-slate-50">
+                    {pending.diff.newParticipants.map((p, i) => (
+                      <div key={i} className="px-4 py-2 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-slate-700 truncate">{p.name} <span className="text-xs text-slate-400">/ {p.dept}</span></div>
+                          <div className="text-xs text-slate-400 truncate">{p.email}</div>
+                        </div>
+                        <span className="text-xs text-slate-500 font-semibold shrink-0">{p.company}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {pending.diff.newParticipants.length === 0 && pending.diff.newCompanies.length === 0 && (
+                <p className="text-sm text-slate-500 text-center py-4">추가할 항목이 없습니다. 이미 모두 등록되어 있습니다.</p>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-100 flex gap-2 justify-end shrink-0">
+          {pending && (
+            <button onClick={() => setPending(null)}
+              className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">다시 선택</button>
+          )}
+          <button onClick={onClose}
+            className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">닫기</button>
+          {pending && (
+            <button onClick={apply}
+              disabled={busy || (pending.diff.newParticipants.length === 0 && pending.diff.newCompanies.length === 0)}
+              className={`px-5 py-2 text-sm text-white rounded-xl font-semibold transition-colors ${busy || (pending.diff.newParticipants.length === 0 && pending.diff.newCompanies.length === 0) ? "bg-slate-300 cursor-not-allowed" : "bg-emerald-500 hover:bg-emerald-600"}`}>
+              {busy ? "복구 중..." : "♻️ 복구 실행"}
+            </button>
+          )}
+        </div>
+      </div>
+    </Overlay>
+  );
+}
+
 /* ─── 통합 로그인 화면 ────────────────────────────── */
-function LoginScreen({ companies, onLogin, onRegister }) {
+function LoginScreen({ companies, onLogin, onRegister, adminAuth }) {
   const [tab, setTab] = useState("admin"); // "admin" | "participant"
 
   // 관리자 폼
   const [adminPwd, setAdminPwd] = useState("");
   const [adminErr, setAdminErr] = useState("");
+  const [adminBusy, setAdminBusy] = useState(false);
 
   // 참여자 폼
   const [pForm, setPForm] = useState({ cid: companies[0]?.id || "", name: "", email: "", dept: "" });
   const [pErr, setPErr] = useState("");
   const [showRegister, setShowRegister] = useState(false);
 
-  const handleAdminLogin = (e) => {
+  const handleAdminLogin = async (e) => {
     e.preventDefault();
-    if (adminPwd === "admin1234") {
-      onLogin({ role: "admin" });
-    } else {
-      setAdminErr("비밀번호가 올바르지 않습니다.");
+    setAdminErr("");
+    setAdminBusy(true);
+    try {
+      // 비밀번호는 소스에 두지 않고 dashboard/config 문서에 PBKDF2 해시로 보관한다.
+      // 해시가 아직 없는 환경(최초 도입 직후)에서만 레거시 비밀번호를 허용한다.
+      const ok = await verifyAdminPassword(adminPwd, adminAuth);
+      if (ok) onLogin({ role: "admin", needsPasswordSetup: !adminAuth?.hash });
+      else setAdminErr("비밀번호가 올바르지 않습니다.");
+    } catch (err) {
+      setAdminErr(err.message || "로그인 처리 중 오류가 발생했습니다.");
+    } finally {
+      setAdminBusy(false);
     }
   };
 
-  const handleParticipantSubmit = (e) => {
+  const handleParticipantSubmit = async (e) => {
     e.preventDefault();
     setPErr("");
     if (!pForm.cid || !pForm.name.trim() || !pForm.email.trim()) {
@@ -356,10 +729,18 @@ function LoginScreen({ companies, onLogin, onRegister }) {
           setPErr("신규 등록 시 부서명은 필수입니다.");
           return;
         }
+        // 서버 저장이 확정된 뒤에만 로그인시킨다.
+        // 예전에는 저장 성공 여부와 무관하게 50ms 뒤 무조건 로그인해서,
+        // 저장이 실패해도 본인은 등록된 줄 알고 넘어갔다.
         const newId = uid();
-        onRegister(pForm.cid, { id: newId, name: pForm.name.trim(), email: pForm.email.trim(), dept: pForm.dept.trim() });
-        // 등록 직후 로그인
-        setTimeout(() => onLogin({ role: "participant", id: newId }), 50);
+        const res = await onRegister(pForm.cid, {
+          id: newId, name: pForm.name.trim(), email: pForm.email.trim(), dept: pForm.dept.trim(),
+        });
+        if (res && res.ok === false) {
+          setPErr(`등록에 실패했습니다. ${res.error?.message || "잠시 후 다시 시도해 주세요."}`);
+          return;
+        }
+        onLogin({ role: "participant", id: newId });
       }
     }
   };
@@ -399,9 +780,14 @@ function LoginScreen({ companies, onLogin, onRegister }) {
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all" />
               </div>
               {adminErr && <p className="text-rose-500 text-xs font-bold">{adminErr}</p>}
-              <button type="submit"
-                className="w-full py-3 mt-4 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl transition-colors shadow-sm">
-                접속하기
+              {!adminAuth?.hash && (
+                <p className="text-amber-600 text-xs font-semibold bg-amber-50 border border-amber-200 rounded-lg p-2.5 leading-relaxed">
+                  ⚠️ 관리자 비밀번호가 아직 설정되지 않았습니다. 접속 후 <b>🔑 비밀번호 변경</b>에서 즉시 변경해 주세요.
+                </p>
+              )}
+              <button type="submit" disabled={adminBusy}
+                className={`w-full py-3 mt-4 text-white font-bold rounded-xl transition-colors shadow-sm ${adminBusy ? "bg-slate-300 cursor-not-allowed" : "bg-violet-600 hover:bg-violet-700"}`}>
+                {adminBusy ? "확인 중..." : "접속하기"}
               </button>
             </form>
           )}
@@ -675,8 +1061,8 @@ async function publishReportToGoogleSheets(companies, targetWeek, setExporting, 
       reports: reports
     };
 
-    // 2. Google Apps Script로 전송
-    const response = await fetch(GAS_URL, {
+    // 2. Google Apps Script로 전송 (no-cors라 응답 본문은 읽을 수 없다)
+    await fetch(GAS_URL, {
       method: "POST",
       mode: "no-cors",
       body: JSON.stringify(payload),
@@ -711,7 +1097,8 @@ async function updateParticipantsToGoogleSheets(companies, setExporting) {
       participants: participants
     };
 
-    const response = await fetch(GAS_URL, {
+    // no-cors라 응답 본문은 읽을 수 없다
+    await fetch(GAS_URL, {
       method: "POST",
       mode: "no-cors",
       body: JSON.stringify(payload),
@@ -729,7 +1116,7 @@ async function updateParticipantsToGoogleSheets(companies, setExporting) {
   }
 }
 
-function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAddCompany, onDeleteCompany, onDeleteParticipant, onUpdateSchedule }) {
+function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAddCompany, onDeleteCompany, onDeleteParticipant, onUpdateSchedule, onOpenBackup, onOpenPassword }) {
   const [showAdd, setShowAdd] = useState(false);
   const [delTarget, setDelTarget] = useState(null);
   const [delParticipantTarget, setDelParticipantTarget] = useState(null);
@@ -804,7 +1191,15 @@ function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAdd
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h2 className="text-sm font-bold text-slate-700">🛰️ 전사 실습 현황 모니터링</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={onOpenBackup} title="참여자 계정 백업 / 복구"
+              className="px-4 py-1.5 bg-sky-500 text-white rounded-xl text-xs font-bold hover:bg-sky-600 transition-colors flex items-center gap-1 shadow-sm">
+              💾 계정 백업·복구
+            </button>
+            <button onClick={onOpenPassword} title="관리자 비밀번호 변경"
+              className="px-4 py-1.5 bg-white text-slate-600 border border-slate-200 rounded-xl text-xs font-bold hover:border-violet-300 hover:text-violet-600 transition-colors flex items-center gap-1">
+              🔑 비밀번호 변경
+            </button>
             <button
               onClick={() => updateParticipantsToGoogleSheets(companies, setIsExportingParticipants)}
               disabled={isExportingParticipants}
@@ -1403,32 +1798,118 @@ function PersonalDashboard({ participant, companyName, schedule, isAdmin, isMine
    메인 APP
 ═══════════════════════════════════════════════════ */
 export default function App() {
-  const [companies, setCompanies] = useState(INIT);
+  const [companies, setCompanies] = useState([]);
   const companiesRef = useRef(companies);
   useEffect(() => { companiesRef.current = companies; }, [companies]);
 
-  const [isDbLoaded, setIsDbLoaded] = useState(false);
+  // "loading" 최초 로딩 | "synced" 서버 확정 | "offline" 캐시만 | "missing" 서버에 문서 없음 | "error"
+  const [dbStatus, setDbStatus] = useState("loading");
+  const [alertMsg, setAlertMsg] = useState("");
   const [authState, setAuthState] = useState(null);
 
+  const [adminAuth, setAdminAuth] = useState(null);
+  const [configLoaded, setConfigLoaded] = useState(false);
+
+  const isServerSynced = dbStatus === "synced";
+  const isServerSyncedRef = useRef(false);
+  useEffect(() => { isServerSyncedRef.current = isServerSynced; }, [isServerSynced]);
+
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, "dashboard", "data"), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data().companies;
-        if (data) setCompanies(data);
-      } else {
-        setDoc(doc(db, "dashboard", "data"), { companies: INIT });
+    const ref = doc(db, ...DATA_DOC);
+    // includeMetadataChanges 필수: 캐시로 먼저 뜬 뒤 서버가 같은 내용을 확인해 주면
+    // 데이터는 그대로고 fromCache만 false로 바뀐다. 이 옵션이 없으면 그 전환이
+    // 이벤트로 오지 않아 영원히 "오프라인"으로 남고 저장이 전부 막힌다.
+    const unsub = onSnapshot(
+      ref,
+      { includeMetadataChanges: true },
+      (snap) => {
+        const fromCache = snap.metadata.fromCache;
+        if (snap.exists()) {
+          const data = snap.data().companies;
+          if (Array.isArray(data)) setCompanies(data);
+          setDbStatus(fromCache ? "offline" : "synced");
+          if (!fromCache) setAlertMsg("");
+        } else {
+          // ⛔ 여기서 절대 시드 데이터를 쓰지 않는다.
+          // 오프라인 상태에서는 캐시가 비어 있다는 이유만으로 "문서 없음"이 올라온다.
+          // 2026-09-07, 이 자리에서 INIT을 써버려 운영 데이터 전체가 소실되었다.
+          setDbStatus(fromCache ? "offline" : "missing");
+        }
+      },
+      (err) => {
+        // 기존 코드에는 에러 콜백이 없어 권한·할당량·네트워크 오류가 전부 무음이었다.
+        console.error("[firestore:onSnapshot]", err);
+        setDbStatus("error");
+        setAlertMsg(`서버 연결 오류: ${err.message}`);
       }
-      setIsDbLoaded(true);
-    });
+    );
     return () => unsub();
   }, []);
 
-  const updateCompanies = (updater) => {
-    const next = typeof updater === "function" ? updater(companiesRef.current) : updater;
-    setCompanies(next); // Optimistic UI update
-    if (isDbLoaded) {
-      setDoc(doc(db, "dashboard", "data"), { companies: next });
+  // 관리자 비밀번호 해시 (companies와 별도 문서)
+  useEffect(() => {
+    getDoc(doc(db, ...CONFIG_DOC))
+      .then((snap) => {
+        const d = snap.exists() ? snap.data() : null;
+        setAdminAuth(d?.adminPasswordHash
+          ? { hash: d.adminPasswordHash, salt: d.adminPasswordSalt, iterations: d.adminPasswordIterations }
+          : null);
+      })
+      .catch((err) => { console.error("[firestore:config]", err); setAdminAuth(null); })
+      .finally(() => setConfigLoaded(true));
+  }, []);
+
+  // 모든 저장은 트랜잭션으로 "서버 최신본" 위에 다시 계산한다.
+  // 로컬 사본을 통째로 덮어쓰던 기존 방식은 동시 사용 시 서로의 변경을 지웠다.
+  // 반환값: { ok: boolean, error?: Error }
+  const updateCompanies = (updater, opts = {}) => {
+    const apply = (base) => (typeof updater === "function" ? updater(base) : updater);
+    const rollback = companiesRef.current;
+
+    setCompanies(apply(rollback)); // 낙관적 UI
+
+    if (!isServerSyncedRef.current) {
+      setCompanies(rollback);
+      setAlertMsg("서버와 동기화되지 않아 저장할 수 없습니다. 네트워크를 확인하고 새로고침해 주세요. (변경사항은 저장되지 않았습니다)");
+      return Promise.resolve({ ok: false, error: new Error("NOT_SYNCED") });
     }
+
+    return runTransaction(db, async (tx) => {
+      const ref = doc(db, ...DATA_DOC);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error("대시보드 문서를 찾을 수 없습니다. 저장을 중단했습니다.");
+
+      const server = snap.data().companies;
+      if (!Array.isArray(server)) throw new Error("서버 데이터 형식이 올바르지 않아 저장을 중단했습니다.");
+
+      const next = apply(server);
+      if (!Array.isArray(next)) throw new Error("저장할 데이터 형식이 올바르지 않습니다.");
+
+      // 대량 소실 가드 — 명시적 삭제가 아닌데 수가 줄면 쓰지 않는다.
+      if (!opts.allowShrink) {
+        const before = countParticipants(server);
+        const after = countParticipants(next);
+        if (after < before || next.length < server.length) {
+          throw new Error(
+            `데이터가 줄어드는 저장이 차단되었습니다 (참여자 ${before}→${after}, 업체 ${server.length}→${next.length}). 화면을 새로고침해 주세요.`
+          );
+        }
+      }
+
+      tx.set(ref, { companies: next });
+      return next;
+    })
+      .then((next) => {
+        setCompanies(next);
+        setAlertMsg("");
+        return { ok: true };
+      })
+      .catch((err) => {
+        console.error("[firestore:write]", err);
+        setCompanies(rollback); // 낙관적 갱신 되돌리기
+        setAlertMsg(err.message || "저장에 실패했습니다.");
+        return { ok: false, error: err };
+      });
   };
 
   // null                              = 미로그인 → 로그인 화면
@@ -1439,60 +1920,65 @@ export default function App() {
 
   const [tab, setTab] = useState("company");
   const [companyId, setCompanyId] = useState(() => {
-    try {
-      const saved = localStorage.getItem("ai-dashboard-cid");
-      return saved || INIT[0].id;
-    } catch { return INIT[0].id; }
+    try { return localStorage.getItem("ai-dashboard-cid") || ""; } catch { return ""; }
   });
   const [participantId, setParticipantId] = useState(null);
 
-  useEffect(() => {
-    localStorage.setItem("ai-dashboard-cid", companyId);
-  }, [companyId]);
-
+  // 저장된 업체 id가 비었거나 더 이상 존재하지 않으면 첫 업체로 떨어진다(상태 동기화 없이 파생).
   const selectedCompany = companies.find((c) => c.id === companyId) || companies[0];
+  const effectiveCompanyId = selectedCompany?.id || "";
+
+  useEffect(() => {
+    if (effectiveCompanyId) localStorage.setItem("ai-dashboard-cid", effectiveCompanyId);
+  }, [effectiveCompanyId]);
+
   const allParticipants = companies.flatMap((c) => c.participants.map((p) => ({ ...p, companyName: c.name })));
   const selectedParticipant = participantId ? allParticipants.find((p) => p.id === participantId) : null;
   const selectedParticipantCompany = participantId
     ? companies.find((c) => c.participants.some((p) => p.id === participantId))?.name || "" : "";
 
-  const addCompany = (name) =>
-    updateCompanies((prev) => [...prev, { id: uid(), name, participants: [], chat: [] }]);
+  // updater는 트랜잭션 재시도 때 여러 번 실행되므로 uid()는 반드시 바깥에서 만든다.
+  const addCompany = (name) => {
+    const id = uid();
+    return updateCompanies((prev) => [...prev, { id, name, participants: [], chat: [] }]);
+  };
 
-  const addParticipant = (cid, { id, name, dept, email }) =>
-    updateCompanies((prev) => prev.map((c) =>
+  const addParticipant = (cid, { id, name, dept, email }) => {
+    const newId = id || uid();
+    return updateCompanies((prev) => prev.map((c) =>
       c.id !== cid ? c : {
         ...c,
         participants: [...c.participants, {
-          id: id || uid(), name, dept, email: email || "", status: "정상",
+          id: newId, name, dept, email: email || "", status: "정상",
           tasks: [], summary: "", nextWeekPlan: "", instructorMemo: "",
         }],
       }
     ));
+  };
 
   const deleteCompany = (cid) => {
     const target = companies.find((c) => c.id === cid);
     const hadParticipant = target?.participants.some((p) => p.id === participantId);
-    updateCompanies((prev) => {
-      const remaining = prev.filter((c) => c.id !== cid);
-      if (companyId === cid && remaining.length > 0) setCompanyId(remaining[0].id);
-      return remaining;
-    });
+    // 화면 상태 변경은 updater 밖에서. updater는 트랜잭션 재시도로 여러 번 실행된다.
+    const remaining = companies.filter((c) => c.id !== cid);
+    if (effectiveCompanyId === cid && remaining.length > 0) setCompanyId(remaining[0].id);
     if (hadParticipant) setParticipantId(null);
+    return updateCompanies(
+      (prev) => prev.filter((c) => c.id !== cid),
+      { allowShrink: true }
+    );
   };
 
   const deleteParticipant = (cid, pid) => {
-    const targetComp = companies.find((c) => c.id === cid);
-    if (targetComp && targetComp.participants.length === 1 && targetComp.participants[0].id === pid) {
-      deleteCompany(cid);
-      return;
-    }
-    updateCompanies((prev) =>
-      prev.map((c) =>
-        c.id !== cid ? c : { ...c, participants: c.participants.filter((p) => p.id !== pid) }
-      )
-    );
+    // 마지막 참여자를 지울 때 업체까지 통째로 지우던 동작을 제거했다.
+    // 참여자 1명 삭제가 업체·채팅·일정 전체 삭제로 번지는 사고 경로였다.
     if (participantId === pid) setParticipantId(null);
+    return updateCompanies(
+      (prev) => prev.map((c) =>
+        c.id !== cid ? c : { ...c, participants: c.participants.filter((p) => p.id !== pid) }
+      ),
+      { allowShrink: true }
+    );
   };
 
   const updateParticipant = (updated) =>
@@ -1500,11 +1986,13 @@ export default function App() {
       ...c, participants: c.participants.map((p) => p.id === updated.id ? updated : p),
     })));
 
-  const addTask = (pid, name) =>
-    updateCompanies((prev) => prev.map((c) => ({
+  const addTask = (pid, name) => {
+    const tid = uid();
+    return updateCompanies((prev) => prev.map((c) => ({
       ...c, participants: c.participants.map((p) =>
-        p.id === pid ? { ...p, tasks: [...p.tasks, { id: uid(), name, progress: 0, delta: 0 }] } : p),
+        p.id === pid ? { ...p, tasks: [...p.tasks, { id: tid, name, progress: 0, delta: 0 }] } : p),
     })));
+  };
 
   const deleteTask = (pid, tid) =>
     updateCompanies((prev) => prev.map((c) => ({
@@ -1562,6 +2050,58 @@ export default function App() {
   const goToParticipant = (pid) => { setParticipantId(pid); setTab("personal"); };
   const goToCompany = (cid) => { setCompanyId(cid); setTab("company"); };
 
+  /* ─── 계정 백업 / 복구 ─────────────────────────── */
+  const [showBackup, setShowBackup] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  // 관리자가 볼 때마다 명단 스냅샷을 이 브라우저에 남긴다. 수동 백업을 잊어도 되돌릴 수단이 생긴다.
+  useEffect(() => {
+    if (isAdmin && isServerSynced) writeLocalSnapshot(companies);
+  }, [isAdmin, isServerSynced, companies]);
+
+  // 복구는 '추가만' 한다. 기존 참여자의 과제·요약·메모는 절대 건드리지 않는다.
+  const restoreRoster = async (backup) => {
+    // uid()는 updater 밖에서 미리 확정한다(트랜잭션 재시도 대비).
+    const prepared = backup.companies.map((bc) => ({
+      id: bc.id || uid(),
+      name: bc.name,
+      schedule: bc.schedule || null,
+      participants: (bc.participants || []).map((bp) => ({
+        id: bp.id || uid(),
+        name: bp.name,
+        dept: bp.dept || "",
+        email: bp.email || "",
+      })),
+    }));
+
+    const res = await updateCompanies((prev) => {
+      const next = prev.map((c) => ({ ...c, participants: [...(c.participants || [])] }));
+      for (const bc of prepared) {
+        let target = next.find((c) => c.id === bc.id) || next.find((c) => c.name === bc.name);
+        if (!target) {
+          target = {
+            id: bc.id, name: bc.name, participants: [], chat: [],
+            ...(bc.schedule ? { schedule: bc.schedule } : {}),
+          };
+          next.push(target);
+        }
+        for (const bp of bc.participants) {
+          const dup = target.participants.some(
+            (p) => p.id === bp.id || (p.name === bp.name && p.email === bp.email)
+          );
+          if (dup) continue;
+          target.participants.push({
+            id: bp.id, name: bp.name, dept: bp.dept, email: bp.email,
+            status: "정상", tasks: [], summary: "", nextWeekPlan: "", instructorMemo: "",
+          });
+        }
+      }
+      return next;
+    });
+
+    if (!res.ok) throw res.error || new Error("복구에 실패했습니다.");
+  };
+
   // 참여자 본인 정보 파생
   const myParticipant = myParticipantId ? allParticipants.find((p) => p.id === myParticipantId) : null;
   const myCompany = myParticipantId
@@ -1572,6 +2112,8 @@ export default function App() {
     setAuthState(auth);
     if (auth.role === 'admin') {
       setTab("instructor");
+      // 기본 비밀번호로 들어온 경우 즉시 변경을 유도한다.
+      if (auth.needsPasswordSetup) setShowPassword(true);
     } else {
       const c = companies.find((co) => co.participants.some((p) => p.id === auth.id));
       setParticipantId(auth.id);
@@ -1593,7 +2135,7 @@ export default function App() {
     { id: "personal", label: "👤 개인 대시보드" },
   ];
 
-  if (!isDbLoaded) {
+  if (dbStatus === "loading" || !configLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-violet-500 font-bold animate-pulse text-lg tracking-wide">
@@ -1603,12 +2145,56 @@ export default function App() {
     );
   }
 
+  // 서버에 문서가 없다고 응답한 경우. 예전에는 여기서 시드 데이터를 써버려 전체가 날아갔다.
+  // 이제는 아무것도 쓰지 않고 멈춘다.
+  if (dbStatus === "missing") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-rose-100 max-w-md w-full p-8 text-center space-y-3">
+          <div className="text-4xl">🚫</div>
+          <h1 className="text-base font-bold text-slate-800">대시보드 데이터를 찾을 수 없습니다</h1>
+          <p className="text-sm text-slate-500 leading-relaxed">
+            서버에 <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">dashboard/data</code> 문서가 없습니다.
+            데이터 보호를 위해 자동 생성하지 않습니다. 관리자에게 문의해 주세요.
+          </p>
+          <button onClick={() => window.location.reload()}
+            className="px-5 py-2 text-sm bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors font-semibold">
+            새로고침
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const statusBanner = dbStatus !== "synced" || alertMsg ? (
+    <div className={`px-4 py-2.5 text-xs font-bold text-center ${dbStatus === "synced" ? "bg-rose-50 text-rose-700 border-b border-rose-100" : "bg-amber-50 text-amber-800 border-b border-amber-200"}`}>
+      {alertMsg || (dbStatus === "offline"
+        ? "⚠️ 오프라인 상태입니다. 화면은 마지막으로 받은 내용이며, 변경사항은 저장되지 않습니다."
+        : "⚠️ 서버와 연결되지 않았습니다. 변경사항은 저장되지 않습니다.")}
+    </div>
+  ) : null;
+
   if (!authState) {
-    return <LoginScreen companies={companies} onLogin={handleLogin} onRegister={addParticipant} />;
+    return (
+      <>
+        {statusBanner}
+        <LoginScreen companies={companies} onLogin={handleLogin} onRegister={addParticipant}
+          adminAuth={adminAuth} />
+      </>
+    );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-violet-50/30 to-sky-50/40">
+      {showBackup && (
+        <BackupRestoreModal companies={companies} onRestore={restoreRoster}
+          onClose={() => setShowBackup(false)} />
+      )}
+      {showPassword && (
+        <AdminPasswordModal adminAuth={adminAuth}
+          onSaved={setAdminAuth} onClose={() => setShowPassword(false)} />
+      )}
+      {statusBanner}
       {/* 헤더 */}
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-10 shadow-sm">
         <div className="max-w-6xl mx-auto px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1669,7 +2255,7 @@ export default function App() {
             {(isAdmin ? companies : (myCompany ? [myCompany] : [])).map((c) => (
               <button key={c.id} onClick={() => isAdmin && setCompanyId(c.id)}
                 className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all
-                  ${companyId === c.id ? "bg-sky-500 text-white shadow-sm" : "bg-white text-slate-500 border border-slate-200 hover:border-sky-300"}
+                  ${effectiveCompanyId === c.id ? "bg-sky-500 text-white shadow-sm" : "bg-white text-slate-500 border border-slate-200 hover:border-sky-300"}
                   ${!isAdmin ? "cursor-default" : ""}`}>
                 {c.name}
               </button>
@@ -1695,7 +2281,9 @@ export default function App() {
           <InstructorView companies={companies} onSelectCompany={goToCompany}
             onSelectParticipant={goToParticipant} onAddCompany={addCompany}
             onDeleteCompany={deleteCompany} onDeleteParticipant={deleteParticipant}
-            onUpdateSchedule={updateCompanySchedule} />
+            onUpdateSchedule={updateCompanySchedule}
+            onOpenBackup={() => setShowBackup(true)}
+            onOpenPassword={() => setShowPassword(true)} />
         )}
 
         {tab === "company" && selectedCompany && (

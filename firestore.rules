@@ -1,0 +1,75 @@
+rules_version = '2';
+
+// AI 대시보드 Firestore 보안 규칙
+//
+// 배포:  firebase deploy --only firestore:rules
+// 또는:  Firebase 콘솔 → Firestore Database → 규칙 탭에 붙여넣기
+//
+// ─────────────────────────────────────────────────────────────
+// 2단계로 적용합니다.
+//
+//  1단계 (지금 바로, 앱 동작에 영향 없음)
+//     아래 isAppRequest() 를 `return true;` 로 둔 채 배포합니다.
+//     문서 생성·삭제 금지와 대량 소실 차단이 서버에서 강제됩니다.
+//     2026-09-07 같은 전체 초기화는 클라이언트 코드가 어떻게 망가지든 불가능해집니다.
+//
+//  2단계 (App Check 설정 후)
+//     Firebase 콘솔 → App Check 에서 reCAPTCHA v3 로 웹 앱을 등록하고,
+//     사이트 키를 .env 의 VITE_RECAPTCHA_SITE_KEY 에 넣어 배포한 뒤,
+//     Firestore에 대해 '적용(enforce)'을 켭니다.
+//     그 다음 isAppRequest() 를 `return request.app != null;` 로 바꿔 재배포하면
+//     배포된 앱에서 온 요청만 통과합니다. 지금처럼 API 키만으로 하는
+//     외부 REST 호출은 전부 차단됩니다.
+//
+//     ⚠️ 순서를 지키세요. App Check 적용을 켜기 전에 request.app 조건을 켜면
+//        앱 전체가 즉시 동작을 멈춥니다.
+// ─────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAppRequest() {
+      // 2단계에서 아래 줄을 `return request.app != null;` 로 교체
+      return true;
+    }
+
+    function isCompanyList(v) {
+      return v is list && v.size() > 0;
+    }
+
+    // 대시보드 본문 — 전체 업체·참여자·과제·채팅
+    match /dashboard/data {
+      allow read: if isAppRequest();
+
+      // 생성과 삭제를 원천 차단한다.
+      // 전체 소실은 "문서가 없다"는 클라이언트의 오판에서 시작됐다.
+      // 이 문서는 콘솔에서만 만들고 지운다.
+      allow create: if false;
+      allow delete: if false;
+
+      allow update: if isAppRequest()
+        // companies 외의 필드가 끼어들지 못하게 한다
+        && request.resource.data.keys().hasOnly(['companies'])
+        && isCompanyList(request.resource.data.companies)
+        // 업체가 한 번에 2개 이상 사라지는 저장은 거부.
+        // 정상적인 업체 삭제(1개씩)는 통과한다.
+        && request.resource.data.companies.size() >= resource.data.companies.size() - 1;
+    }
+
+    // 관리자 설정 — 비밀번호 해시(PBKDF2 + 솔트)
+    // 클라이언트가 검증하려면 읽어야 하므로 읽기를 막을 수 없다.
+    // 그래서 솔트와 31만 회 반복을 쓴다. 완전한 은닉은 Firebase Auth 도입이 필요하다.
+    match /dashboard/config {
+      allow read: if isAppRequest();
+      allow write: if isAppRequest()
+        && request.resource.data.keys().hasOnly([
+             'adminPasswordHash', 'adminPasswordSalt', 'adminPasswordIterations', 'updatedAt'
+           ]);
+    }
+
+    // 그 외 전부 차단
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
