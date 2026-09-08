@@ -1,4 +1,5 @@
 import { initializeApp } from "firebase/app";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import {
     initializeFirestore,
     persistentLocalCache,
@@ -17,6 +18,21 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+
+// App Check — 배포된 앱에서 온 요청만 Firestore가 받아들이게 한다.
+// Firebase 콘솔에서 reCAPTCHA v3 사이트 키를 발급받아 .env 에 넣으면 활성화된다.
+//   VITE_RECAPTCHA_SITE_KEY=6Lxxxxxxxxxxxxxxxxxxxxxxxxxx
+// 키가 없으면 아무 일도 하지 않으므로 지금 배포해도 동작에 영향이 없다.
+// 자세한 절차는 firestore.rules 상단 주석 참고.
+const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+if (recaptchaSiteKey) {
+    // 로컬 개발 중에는 콘솔에 찍히는 디버그 토큰을 App Check에 등록해야 한다.
+    if (import.meta.env.DEV) self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+        isTokenAutoRefreshEnabled: true,
+    });
+}
 
 // Initialize Cloud Firestore and get a reference to the service
 //

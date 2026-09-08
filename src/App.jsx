@@ -22,12 +22,53 @@ const LEGACY_ADMIN_PWD = "admin1234";
 const countParticipants = (cs) =>
   (cs || []).reduce((s, c) => s + (c.participants?.length || 0), 0);
 
-async function sha256Hex(text) {
+// 비밀번호는 PBKDF2-SHA256 + 무작위 솔트로 유도한다.
+// config 문서는 클라이언트가 읽어야 검증이 되므로 해시가 노출된다.
+// 단순 SHA-256이면 레인보우 테이블로 즉시 역산되지만, 솔트와 반복 횟수가 있으면
+// 쓸만한 비밀번호에 대해 대입 비용이 실질적으로 커진다.
+const PBKDF2_ITERATIONS = 310000;
+
+const toHex = (buf) =>
+  Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+
+const fromHex = (hex) =>
+  new Uint8Array((hex.match(/.{1,2}/g) || []).map((h) => parseInt(h, 16)));
+
+function requireCrypto() {
   if (!globalThis.crypto?.subtle) {
     throw new Error("이 브라우저에서는 암호화 기능을 쓸 수 없습니다. https 주소로 접속해 주세요.");
   }
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function derivePassword(password, saltHex, iterations = PBKDF2_ITERATIONS) {
+  requireCrypto();
+  const key = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt: fromHex(saltHex), iterations, hash: "SHA-256" }, key, 256
+  );
+  return toHex(bits);
+}
+
+function newSaltHex() {
+  requireCrypto();
+  return toHex(crypto.getRandomValues(new Uint8Array(16)));
+}
+
+// 길이가 같은 문자열의 상수 시간 비교 (타이밍 차이로 정보가 새지 않도록)
+function safeEqual(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+// adminAuth: { hash, salt, iterations } 또는 null(아직 미설정)
+async function verifyAdminPassword(password, adminAuth) {
+  if (!adminAuth?.hash || !adminAuth?.salt) return password === LEGACY_ADMIN_PWD;
+  const derived = await derivePassword(password, adminAuth.salt, adminAuth.iterations || PBKDF2_ITERATIONS);
+  return safeEqual(derived, adminAuth.hash);
 }
 
 /* ─── 계정 백업(참여자 명단 전용) ─────────────────── */
@@ -347,7 +388,7 @@ function ScheduleEditModal({ company, onSave, onClose }) {
 }
 
 /* ─── 관리자 비밀번호 변경 모달 ───────────────────── */
-function AdminPasswordModal({ currentHash, onSaved, onClose }) {
+function AdminPasswordModal({ adminAuth, onSaved, onClose }) {
   const [cur, setCur] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -363,16 +404,21 @@ function AdminPasswordModal({ currentHash, onSaved, onClose }) {
 
     setBusy(true);
     try {
-      const ok = currentHash ? (await sha256Hex(cur)) === currentHash : cur === LEGACY_ADMIN_PWD;
+      const ok = await verifyAdminPassword(cur, adminAuth);
       if (!ok) { setErr("현재 비밀번호가 올바르지 않습니다."); return; }
 
-      const hash = await sha256Hex(next);
+      const salt = newSaltHex();
+      const hash = await derivePassword(next, salt, PBKDF2_ITERATIONS);
+      const record = { hash, salt, iterations: PBKDF2_ITERATIONS };
+
       // config는 companies와 별도 문서라 명단 저장 가드의 영향을 받지 않는다.
       await setDoc(doc(db, ...CONFIG_DOC), {
         adminPasswordHash: hash,
+        adminPasswordSalt: salt,
+        adminPasswordIterations: PBKDF2_ITERATIONS,
         updatedAt: new Date().toISOString(),
       }, { merge: true });
-      onSaved(hash);
+      onSaved(record);
       onClose();
     } catch (e2) {
       console.error("[admin-password]", e2);
@@ -401,21 +447,22 @@ function AdminPasswordModal({ currentHash, onSaved, onClose }) {
           </div>
         </div>
 
-        {!currentHash && (
+        {!adminAuth?.hash && (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5 leading-relaxed">
             현재 기본 비밀번호를 쓰고 있습니다. 이 값은 공개 저장소와 배포 번들에 노출되어 있으니 반드시 변경해 주세요.
           </p>
         )}
 
-        {field(currentHash ? "현재 비밀번호" : "현재 비밀번호 (기본값)", cur, setCur, true)}
+        {field(adminAuth?.hash ? "현재 비밀번호" : "현재 비밀번호 (기본값)", cur, setCur, true)}
         {field("새 비밀번호 (8자 이상)", next, setNext)}
         {field("새 비밀번호 확인", confirm, setConfirm)}
 
         {err && <p className="text-rose-500 text-xs font-bold">{err}</p>}
 
         <p className="text-[11px] text-slate-400 leading-relaxed">
-          비밀번호는 SHA-256 해시로만 저장되며 평문은 어디에도 남지 않습니다. 다만 현재 Firestore 보안 규칙이
-          공개 상태라 이 검증은 클라이언트 수준입니다. 완전한 접근 통제는 Firebase Auth 도입이 필요합니다.
+          비밀번호는 무작위 솔트를 붙여 PBKDF2-SHA256으로 {PBKDF2_ITERATIONS.toLocaleString()}회 늘려 저장하며
+          평문은 어디에도 남지 않습니다. 검증은 클라이언트에서 이뤄지므로, 외부 접근 차단은
+          Firestore 보안 규칙과 App Check 적용이 함께 필요합니다.
         </p>
 
         <div className="flex gap-2 justify-end pt-1">
@@ -631,7 +678,7 @@ function BackupRestoreModal({ companies, onRestore, onClose }) {
 }
 
 /* ─── 통합 로그인 화면 ────────────────────────────── */
-function LoginScreen({ companies, onLogin, onRegister, adminPasswordHash }) {
+function LoginScreen({ companies, onLogin, onRegister, adminAuth }) {
   const [tab, setTab] = useState("admin"); // "admin" | "participant"
 
   // 관리자 폼
@@ -649,12 +696,10 @@ function LoginScreen({ companies, onLogin, onRegister, adminPasswordHash }) {
     setAdminErr("");
     setAdminBusy(true);
     try {
-      // 비밀번호는 소스에 두지 않고 dashboard/config 문서에 SHA-256 해시로 보관한다.
+      // 비밀번호는 소스에 두지 않고 dashboard/config 문서에 PBKDF2 해시로 보관한다.
       // 해시가 아직 없는 환경(최초 도입 직후)에서만 레거시 비밀번호를 허용한다.
-      const ok = adminPasswordHash
-        ? (await sha256Hex(adminPwd)) === adminPasswordHash
-        : adminPwd === LEGACY_ADMIN_PWD;
-      if (ok) onLogin({ role: "admin", needsPasswordSetup: !adminPasswordHash });
+      const ok = await verifyAdminPassword(adminPwd, adminAuth);
+      if (ok) onLogin({ role: "admin", needsPasswordSetup: !adminAuth?.hash });
       else setAdminErr("비밀번호가 올바르지 않습니다.");
     } catch (err) {
       setAdminErr(err.message || "로그인 처리 중 오류가 발생했습니다.");
@@ -735,7 +780,7 @@ function LoginScreen({ companies, onLogin, onRegister, adminPasswordHash }) {
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all" />
               </div>
               {adminErr && <p className="text-rose-500 text-xs font-bold">{adminErr}</p>}
-              {!adminPasswordHash && (
+              {!adminAuth?.hash && (
                 <p className="text-amber-600 text-xs font-semibold bg-amber-50 border border-amber-200 rounded-lg p-2.5 leading-relaxed">
                   ⚠️ 관리자 비밀번호가 아직 설정되지 않았습니다. 접속 후 <b>🔑 비밀번호 변경</b>에서 즉시 변경해 주세요.
                 </p>
@@ -1762,7 +1807,7 @@ export default function App() {
   const [alertMsg, setAlertMsg] = useState("");
   const [authState, setAuthState] = useState(null);
 
-  const [adminPasswordHash, setAdminPasswordHash] = useState(null);
+  const [adminAuth, setAdminAuth] = useState(null);
   const [configLoaded, setConfigLoaded] = useState(false);
 
   const isServerSynced = dbStatus === "synced";
@@ -1804,8 +1849,13 @@ export default function App() {
   // 관리자 비밀번호 해시 (companies와 별도 문서)
   useEffect(() => {
     getDoc(doc(db, ...CONFIG_DOC))
-      .then((snap) => setAdminPasswordHash(snap.exists() ? snap.data().adminPasswordHash || null : null))
-      .catch((err) => { console.error("[firestore:config]", err); setAdminPasswordHash(null); })
+      .then((snap) => {
+        const d = snap.exists() ? snap.data() : null;
+        setAdminAuth(d?.adminPasswordHash
+          ? { hash: d.adminPasswordHash, salt: d.adminPasswordSalt, iterations: d.adminPasswordIterations }
+          : null);
+      })
+      .catch((err) => { console.error("[firestore:config]", err); setAdminAuth(null); })
       .finally(() => setConfigLoaded(true));
   }, []);
 
@@ -2129,7 +2179,7 @@ export default function App() {
       <>
         {statusBanner}
         <LoginScreen companies={companies} onLogin={handleLogin} onRegister={addParticipant}
-          adminPasswordHash={adminPasswordHash} />
+          adminAuth={adminAuth} />
       </>
     );
   }
@@ -2141,8 +2191,8 @@ export default function App() {
           onClose={() => setShowBackup(false)} />
       )}
       {showPassword && (
-        <AdminPasswordModal currentHash={adminPasswordHash}
-          onSaved={setAdminPasswordHash} onClose={() => setShowPassword(false)} />
+        <AdminPasswordModal adminAuth={adminAuth}
+          onSaved={setAdminAuth} onClose={() => setShowPassword(false)} />
       )}
       {statusBanner}
       {/* 헤더 */}
