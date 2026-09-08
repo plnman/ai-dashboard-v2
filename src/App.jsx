@@ -1328,8 +1328,105 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
     setReplyingToId(null);
   };
 
+  /* ─── 우클릭 컨텍스트 메뉴 ─────────────────────── */
+  // { x, y, editKey, replyKey, mid, rid, text, canEdit }
+  const [ctxMenu, setCtxMenu] = useState(null);
+
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    const onKey = (e) => { if (e.key === "Escape") close(); };
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [ctxMenu]);
+
+  const openCtxMenu = (e, item) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // 화면 밖으로 나가지 않게 대략 보정
+    const W = 140, H = item.canEdit ? 152 : 84;
+    setCtxMenu({
+      ...item,
+      x: Math.min(e.clientX, window.innerWidth - W - 8),
+      y: Math.min(e.clientY, window.innerHeight - H - 8),
+    });
+  };
+
+  // 복사 결과 알림 ("" 이면 표시 안 함)
+  const [toast, setToast] = useState("");
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(""), 1800);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const copyText = async (text) => {
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    } catch {
+      // https 가 아니거나 권한이 없는 환경 대비
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.cssText = "position:fixed;opacity:0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { ok = document.execCommand("copy"); } catch { ok = false; }
+      document.body.removeChild(ta);
+    }
+    setToast(ok ? "복사되었습니다" : "복사에 실패했습니다");
+  };
+
+  const ctxItems = ctxMenu ? [
+    { label: "복사", icon: "📋", show: true, run: () => copyText(ctxMenu.text) },
+    {
+      label: "수정", icon: "✏️", show: ctxMenu.canEdit,
+      run: () => { setEditingId(ctxMenu.editKey); setEditMsg(ctxMenu.text); },
+    },
+    {
+      label: "답장", icon: "↩️", show: true,
+      run: () => { setReplyingToId(ctxMenu.replyKey); setReplyMsg(""); },
+    },
+    {
+      label: "삭제", icon: "🗑", show: ctxMenu.canEdit, danger: true,
+      run: () => ctxMenu.rid
+        ? onDeleteReply(company.id, ctxMenu.mid, ctxMenu.rid)
+        : onDeleteChat(company.id, ctxMenu.mid),
+    },
+  ].filter((it) => it.show) : [];
+
   return (
     <div className="space-y-5">
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-slate-800 text-white text-xs font-semibold shadow-lg">
+          {toast}
+        </div>
+      )}
+      {ctxMenu && (
+        <div
+          className="fixed z-50 min-w-[140px] bg-white rounded-xl shadow-lg border border-slate-200 py-1 text-sm"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}>
+          {ctxItems.map((it) => (
+            <button key={it.label}
+              onClick={() => { it.run(); setCtxMenu(null); }}
+              className={`w-full text-left px-3 py-1.5 flex items-center gap-2 font-medium transition-colors
+                ${it.danger ? "text-rose-600 hover:bg-rose-50" : "text-slate-700 hover:bg-slate-50"}`}>
+              <span className="w-4 text-xs">{it.icon}</span>{it.label}
+            </button>
+          ))}
+        </div>
+      )}
       {showReport && isAdmin && <ReportModal company={company} onClose={() => setShowReport(false)} />}
       {showAddParticipant && (
         <AddParticipantModal
@@ -1437,6 +1534,8 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
                         {senderName[0]}
                       </div>
                       <div className={`max-w-[85%] flex flex-col gap-0.5 ${m.role === "강사" || m.role === "나" ? "items-end" : "items-start"}`}>
+                        {/* 아바타는 성 한 글자만 보여주므로 전체 이름을 따로 표시한다 */}
+                        <span className="text-[11px] font-semibold text-slate-500 px-0.5 leading-none mb-0.5">{senderName}</span>
                         {editingId === (m.id || i) ? (
                           <div className="flex flex-col gap-1 items-end w-full">
                             <textarea value={editMsg} onChange={e => setEditMsg(e.target.value)}
@@ -1451,7 +1550,11 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
                             <div className={`group relative px-3 py-2 rounded-2xl text-sm leading-relaxed
                           ${m.role === "강사" || m.role === "나"
                                 ? "bg-sky-500 text-white rounded-tr-sm"
-                                : "bg-slate-100 text-slate-700 rounded-tl-sm"}`}>
+                                : "bg-slate-100 text-slate-700 rounded-tl-sm"}`}
+                              onContextMenu={(e) => openCtxMenu(e, {
+                                editKey: m.id || i, replyKey: m.id || i,
+                                mid: m.id, rid: null, text: m.text, canEdit,
+                              })}>
                               {m.text}
 
                               {/* Hover Actions */}
@@ -1503,6 +1606,7 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
                                 {rSenderName[0]}
                               </div>
                               <div className={`max-w-[85%] flex flex-col gap-0.5 ${r.role === "강사" || r.role === "나" ? "items-end" : "items-start"}`}>
+                                <span className="text-[10px] font-semibold text-slate-400 px-0.5 leading-none">{rSenderName}</span>
                                 {editingId === rEditId ? (
                                   <div className="flex flex-col gap-1 items-end w-full">
                                     <textarea value={editMsg} onChange={e => setEditMsg(e.target.value)}
@@ -1515,7 +1619,11 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
                                 ) : (
                                   <div className={`flex items-end gap-1.5 ${r.role === "강사" || r.role === "나" ? "flex-row-reverse" : "flex-row"}`}>
                                     <div className={`group relative px-2.5 py-1.5 rounded-xl text-xs leading-relaxed
-                                  ${r.role === "강사" || r.role === "나" ? "bg-indigo-100 text-indigo-900 rounded-tr-sm" : "bg-slate-100 text-slate-700 rounded-tl-sm"}`}>
+                                  ${r.role === "강사" || r.role === "나" ? "bg-indigo-100 text-indigo-900 rounded-tr-sm" : "bg-slate-100 text-slate-700 rounded-tl-sm"}`}
+                                      onContextMenu={(e) => openCtxMenu(e, {
+                                        editKey: rEditId, replyKey: m.id || i,
+                                        mid: m.id, rid: r.id, text: r.text, canEdit: rCanEdit,
+                                      })}>
                                       {r.text}
                                       {rCanEdit && (
                                         <div className={`absolute -top-3 flex gap-1 bg-white/95 backdrop-blur shadow-sm border border-slate-200 rounded-md px-1.5 py-1 
