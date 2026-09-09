@@ -484,6 +484,46 @@ function AdminPasswordModal({ adminAuth, onSaved, onClose }) {
    같은 명단을 두 곳으로 내보내는 꼴이었다. 파일은 PC에 묶이고 잃어버리기 쉬워서 없앴다.
    복구원은 둘: 브라우저에 쌓이는 자동 스냅샷, 그리고 시트에서 복사해 붙여넣기. */
 
+// 구글 시트를 직접 읽어온다. GAS 의 doGet 이 CORS 헤더를 붙여줘서 그냥 fetch 로 된다.
+// 응답: { status, participants:[{company,dept,name,email}], companies:[{name,startDate,kickoffDate,endDate}] }
+const fetchRosterFromSheets = async () => {
+  const res = await fetch(`${GAS_URL}?action=getRoster`, { redirect: "follow" });
+  if (!res.ok) throw new Error(`시트를 불러오지 못했습니다 (HTTP ${res.status})`);
+
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    // 배포가 옛 버전이면 '함수를 찾을 수 없습니다' HTML 이 돌아온다
+    throw new Error("시트 응답을 읽지 못했습니다. Apps Script 가 최신 버전으로 배포됐는지 확인해 주세요.");
+  }
+  if (data.status !== "ok") throw new Error(data.message || "시트에서 오류가 반환되었습니다.");
+
+  const schedules = new Map(
+    (data.companies || []).map((c) => [c.name, c])
+  );
+  const byCompany = new Map();
+  for (const p of data.participants || []) {
+    if (!p.company || !p.name) continue;
+    if (!byCompany.has(p.company)) byCompany.set(p.company, []);
+    byCompany.get(p.company).push({ name: p.name, dept: p.dept || "", email: p.email || "" });
+  }
+  if (!byCompany.size) throw new Error("'참여자' 시트가 비어 있습니다. 먼저 백업을 한 번 실행해 주세요.");
+
+  return {
+    version: BACKUP_VERSION,
+    exportedAt: data.exportedAt || new Date().toISOString(),
+    skipped: 0,
+    companies: [...byCompany].map(([name, participants]) => {
+      const s = schedules.get(name);
+      const schedule = s && (s.startDate || s.endDate)
+        ? { startDate: s.startDate, kickoffDate: s.kickoffDate, endDate: s.endDate }
+        : null;
+      return { name, schedule, participants };
+    }),
+  };
+};
+
 // 구글 시트에서 복사한 행을 파싱한다. 시트 복사는 탭 구분, 손으로 옮기면 쉼표일 수 있다.
 // 기대 열 순서: 업체 / 팀(부서) / 이름 / 이메일 — updateParticipantsToGoogleSheets 가 쓰는 순서와 같다.
 const parseSheetRoster = (text) => {
@@ -526,14 +566,19 @@ function BackupRestoreModal({ companies, onRestore, onClose }) {
   const snapshots = readLocalSnapshots();
   const total = countParticipants(companies);
 
-  const stage = (parse, source) => {
+  const [loading, setLoading] = useState(false);
+
+  const stage = async (parse, source) => {
     setErr("");
+    setLoading(true);
     try {
-      const backup = parse();
+      const backup = await parse();
       setPending({ backup, diff: diffRosterBackup(backup, companies), source });
     } catch (e) {
       setPending(null);
       setErr(e.message || "내용을 읽을 수 없습니다.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -599,8 +644,20 @@ function BackupRestoreModal({ companies, onRestore, onClose }) {
 
           {mode === "restore" && !pending && (
             <>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-2">구글 시트에서 불러오기</label>
+                <button onClick={() => stage(fetchRosterFromSheets, "구글 시트")}
+                  disabled={loading}
+                  className={`w-full py-3 rounded-xl font-bold text-sm text-white transition-opacity ${loading ? "bg-slate-300 cursor-not-allowed" : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90"}`}>
+                  {loading ? "불러오는 중..." : "☁️ 시트에서 바로 불러오기"}
+                </button>
+                <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                  &apos;참여자&apos; 시트를 그대로 읽어옵니다. &apos;업체&apos; 시트가 있으면 일정도 함께 가져옵니다.
+                </p>
+              </div>
+
               {snapshots.length > 0 && (
-                <div>
+                <div className="border-t border-slate-100 pt-4">
                   <label className="block text-xs font-bold text-slate-500 mb-2">이 브라우저의 자동 스냅샷</label>
                   <div className="space-y-1.5">
                     {snapshots.map((s, i) => (
@@ -613,7 +670,7 @@ function BackupRestoreModal({ companies, onRestore, onClose }) {
                   </div>
                 </div>
               )}
-              <div className={snapshots.length > 0 ? "border-t border-slate-100 pt-4" : ""}>
+              <div className="border-t border-slate-100 pt-4">
                 <label className="block text-xs font-bold text-slate-500 mb-2">구글 시트에서 붙여넣기</label>
                 <p className="text-xs text-slate-400 mb-2 leading-relaxed">
                   <b>&apos;참여자&apos;</b> 시트에서 업체 · 팀 · 이름 · 이메일 네 열을 선택해 복사한 뒤 아래에 붙여넣으세요. 머리글 행은 있어도 됩니다.
@@ -991,7 +1048,8 @@ function StatCard({ label, value, icon, gradient }) {
 /* ═══════════════════════════════════════════════════
    TAB 1 — 강사 관제 센터 (관리자 전용)
 ═══════════════════════════════════════════════════ */
-const GAS_URL = "https://script.google.com/macros/s/AKfycbwcaZ555b2rO-RrTB_toFHRMNkIYqSuz2JrkTdf3pdFxMmZ0ywBReGsirDqWdG-v4Y/exec";
+// 2026-09-09 재배포: doGet(시트 → JSON 읽기)과 '업체' 시트 기록이 추가된 버전
+const GAS_URL = "https://script.google.com/macros/s/AKfycbyEywx3NhTeh5RZFwzGPX0zdbGQyR1Mg_vACzwMjLJEp7JjrBATEDbNIfqFVknxWVs/exec";
 
 async function publishReportToGoogleSheets(companies, targetWeek, setExporting, adminMemo = "") {
   setExporting(true);
@@ -1111,9 +1169,19 @@ async function updateParticipantsToGoogleSheets(companies, setExporting) {
       }))
     );
 
+    // 업체 일정도 함께 백업한다. 참여자 명단만으로는 일정을 복구할 수 없어서
+    // 2026-09-09 에 '업체' 시트를 추가했다(파워넷사 일정이 사고로 날아간 뒤).
+    const companyRows = companies.map((c) => ({
+      name: c.name,
+      startDate: c.schedule?.startDate || "",
+      kickoffDate: c.schedule?.kickoffDate || "",
+      endDate: c.schedule?.endDate || "",
+    }));
+
     const payload = {
       action: "updateParticipants",
-      participants: participants
+      participants: participants,
+      companies: companyRows,
     };
 
     // no-cors라 응답 본문은 읽을 수 없다
@@ -1126,7 +1194,7 @@ async function updateParticipantsToGoogleSheets(companies, setExporting) {
       },
     });
 
-    alert(`참여자 명단이 구글 스프레드시트 '참여자' 시트에 성공적으로 업데이트되었습니다!`);
+    alert(`구글 스프레드시트에 백업했습니다.\n· '참여자' 시트: ${participants.length}명\n· '업체' 시트: ${companyRows.length}개 (일정 포함)`);
   } catch (error) {
     console.error("Export Error:", error);
     alert("참여자 업데이트 중 오류가 발생했습니다. 자세한 내용은 콘솔을 확인해주세요.");
