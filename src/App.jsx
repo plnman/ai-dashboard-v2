@@ -478,52 +478,63 @@ function AdminPasswordModal({ adminAuth, onSaved, onClose }) {
   );
 }
 
-/* ─── 참여자 계정 백업 / 복구 모달 ────────────────── */
-const stampNow = () => {
-  const d = new Date();
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
-};
+/* ─── 참여자 백업 / 복구 모달 ─────────────────────
+   백업처는 구글 시트 '참여자' 시트 하나로 통일했다.
+   예전에는 여기서 JSON 파일을 내려받고 툴바에 '참여자 업데이트' 버튼이 따로 있어
+   같은 명단을 두 곳으로 내보내는 꼴이었다. 파일은 PC에 묶이고 잃어버리기 쉬워서 없앴다.
+   복구원은 둘: 브라우저에 쌓이는 자동 스냅샷, 그리고 시트에서 복사해 붙여넣기. */
 
-const downloadJson = (obj, filename) => {
-  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+// 구글 시트에서 복사한 행을 파싱한다. 시트 복사는 탭 구분, 손으로 옮기면 쉼표일 수 있다.
+// 기대 열 순서: 업체 / 팀(부서) / 이름 / 이메일 — updateParticipantsToGoogleSheets 가 쓰는 순서와 같다.
+const parseSheetRoster = (text) => {
+  const rows = String(text || "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => (l.includes("\t") ? l.split("\t") : l.split(",")).map((c) => c.trim()));
+
+  if (!rows.length) throw new Error("붙여넣은 내용이 없습니다.");
+
+  const body = rows.filter((r) => !/^(업체|회사|company)$/i.test(r[0] || ""));
+
+  const byCompany = new Map();
+  let skipped = 0;
+  for (const r of body) {
+    const company = r[0] || "", dept = r[1] || "", name = r[2] || "", email = r[3] || "";
+    if (!company || !name) { skipped++; continue; }
+    if (!byCompany.has(company)) byCompany.set(company, []);
+    byCompany.get(company).push({ name, dept, email });
+  }
+  if (!byCompany.size) {
+    throw new Error("업체·이름을 읽지 못했습니다. 시트의 업체/팀/이름/이메일 4개 열을 그대로 복사해 주세요.");
+  }
+  return {
+    version: BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    skipped,
+    companies: [...byCompany].map(([name, participants]) => ({ name, schedule: null, participants })),
+  };
 };
 
 function BackupRestoreModal({ companies, onRestore, onClose }) {
   const [mode, setMode] = useState("backup"); // "backup" | "restore"
   const [pending, setPending] = useState(null); // { backup, diff, source }
+  const [paste, setPaste] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pushing, setPushing] = useState(false);
   const snapshots = readLocalSnapshots();
   const total = countParticipants(companies);
 
-  const stage = (raw, source) => {
+  const stage = (parse, source) => {
     setErr("");
     try {
-      const backup = parseRosterBackup(raw);
+      const backup = parse();
       setPending({ backup, diff: diffRosterBackup(backup, companies), source });
     } catch (e) {
       setPending(null);
-      setErr(e.message || "백업 파일을 읽을 수 없습니다.");
+      setErr(e.message || "내용을 읽을 수 없습니다.");
     }
-  };
-
-  const onFile = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => stage(reader.result, file.name);
-    reader.onerror = () => setErr("파일을 읽지 못했습니다.");
-    reader.readAsText(file, "utf-8");
-    e.target.value = "";
   };
 
   const apply = async () => {
@@ -538,21 +549,23 @@ function BackupRestoreModal({ companies, onRestore, onClose }) {
     }
   };
 
+  const canApply = pending && (pending.diff.newParticipants.length > 0 || pending.diff.newCompanies.length > 0);
+
   return (
     <Overlay onClose={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[560px] mx-4 max-h-[86vh] flex flex-col">
         <div className="px-6 py-4 border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-sky-100 rounded-xl flex items-center justify-center text-xl">💾</div>
+            <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center text-xl">👥</div>
             <div>
-              <h3 className="text-base font-bold text-slate-800">참여자 계정 백업 / 복구</h3>
-              <p className="text-xs text-slate-400">업체·부서·이름·이메일만 저장합니다 (과제·진척도 제외)</p>
+              <h3 className="text-base font-bold text-slate-800">참여자 백업 · 복구</h3>
+              <p className="text-xs text-slate-400">업체 · 부서 · 이름 · 이메일 (과제·진척도 제외)</p>
             </div>
           </div>
           <div className="flex gap-1 mt-4">
-            {[["backup", "💾 백업"], ["restore", "♻️ 복구"]].map(([id, label]) => (
+            {[["backup", "☁️ 백업"], ["restore", "♻️ 복구"]].map(([id, label]) => (
               <button key={id} onClick={() => { setMode(id); setErr(""); setPending(null); }}
-                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-colors ${mode === id ? "bg-sky-500 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-colors ${mode === id ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
                 {label}
               </button>
             ))}
@@ -564,57 +577,66 @@ function BackupRestoreModal({ companies, onRestore, onClose }) {
 
           {mode === "backup" && (
             <>
-              <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm text-slate-600 space-y-1">
-                <p>업체 <b className="text-slate-800">{companies.length}개</b> · 참여자 <b className="text-slate-800">{total}명</b></p>
-                <p className="text-xs text-slate-400">파일을 내려받아 안전한 곳에 보관하세요. 복구 탭에서 그대로 되돌릴 수 있습니다.</p>
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm text-slate-600">
+                업체 <b className="text-slate-800">{companies.length}개</b> · 참여자 <b className="text-slate-800">{total}명</b>
               </div>
               <button
-                onClick={() => downloadJson(buildRosterBackup(companies), `참여자백업_${stampNow()}.json`)}
-                disabled={total === 0}
-                className={`w-full py-3 rounded-xl font-bold text-sm text-white transition-colors ${total === 0 ? "bg-slate-300 cursor-not-allowed" : "bg-gradient-to-r from-sky-500 to-blue-500 hover:opacity-90"}`}>
-                💾 JSON 파일로 내려받기
+                onClick={() => updateParticipantsToGoogleSheets(companies, setPushing)}
+                disabled={pushing || total === 0}
+                className={`w-full py-3 rounded-xl font-bold text-sm text-white transition-opacity ${pushing || total === 0 ? "bg-slate-300 cursor-not-allowed" : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90"}`}>
+                {pushing ? "백업 중..." : "☁️ 구글 시트에 백업"}
               </button>
-              {snapshots.length > 0 && (
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  이 브라우저에 자동 보관된 스냅샷 {snapshots.length}개가 있습니다. 파일이 없어도 복구 탭에서 되돌릴 수 있습니다.
-                </p>
-              )}
+              <p className="text-xs text-slate-400 leading-relaxed">
+                구글 스프레드시트의 <b>&apos;참여자&apos;</b> 시트에 업체 · 팀 · 이름 · 이메일이 기록됩니다.
+                복구할 때 그 시트를 그대로 복사해 붙여넣으면 됩니다.
+              </p>
+              <p className="text-xs text-slate-400 leading-relaxed border-t border-slate-100 pt-3">
+                관리자로 접속할 때마다 이 브라우저에도 명단 스냅샷이 자동 보관됩니다.
+                현재 <b className="text-slate-600">{snapshots.length}개</b> 보관 중이며 복구 탭에서 바로 되돌릴 수 있습니다.
+              </p>
             </>
           )}
 
           {mode === "restore" && !pending && (
             <>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-2">백업 파일 선택</label>
-                <input type="file" accept="application/json,.json" onChange={onFile}
-                  className="w-full text-sm text-slate-600 file:mr-3 file:px-4 file:py-2 file:rounded-xl file:border-0 file:bg-sky-50 file:text-sky-600 file:font-bold file:text-xs hover:file:bg-sky-100 cursor-pointer" />
-              </div>
               {snapshots.length > 0 && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-2 mt-2">또는 이 브라우저의 자동 스냅샷</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-2">이 브라우저의 자동 스냅샷</label>
                   <div className="space-y-1.5">
                     {snapshots.map((s, i) => (
-                      <button key={i} onClick={() => stage(s, `자동 스냅샷 #${i + 1}`)}
-                        className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-50 hover:bg-sky-50 border border-slate-100 hover:border-sky-200 rounded-xl text-left transition-colors">
-                        <span className="text-xs font-semibold text-slate-600">
-                          {new Date(s.exportedAt).toLocaleString("ko-KR")}
-                        </span>
-                        <span className="text-xs text-slate-400">
-                          업체 {s.companies.length} · 참여자 {countParticipants(s.companies)}명
-                        </span>
+                      <button key={i} onClick={() => stage(() => parseRosterBackup(s), `자동 스냅샷 #${i + 1}`)}
+                        className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-50 hover:bg-emerald-50 border border-slate-100 hover:border-emerald-200 rounded-xl text-left transition-colors">
+                        <span className="text-xs font-semibold text-slate-600">{new Date(s.exportedAt).toLocaleString("ko-KR")}</span>
+                        <span className="text-xs text-slate-400">업체 {s.companies.length} · 참여자 {countParticipants(s.companies)}명</span>
                       </button>
                     ))}
                   </div>
                 </div>
               )}
+              <div className={snapshots.length > 0 ? "border-t border-slate-100 pt-4" : ""}>
+                <label className="block text-xs font-bold text-slate-500 mb-2">구글 시트에서 붙여넣기</label>
+                <p className="text-xs text-slate-400 mb-2 leading-relaxed">
+                  <b>&apos;참여자&apos;</b> 시트에서 업체 · 팀 · 이름 · 이메일 네 열을 선택해 복사한 뒤 아래에 붙여넣으세요. 머리글 행은 있어도 됩니다.
+                </p>
+                <textarea value={paste} onChange={(e) => setPaste(e.target.value)} rows={6}
+                  placeholder={"성우전자\t제조그룹\t권민수\tmskwon@swei.co.kr\n성우전자\t기획그룹\t홍성락\traphae4@swei.co.kr"}
+                  className="w-full px-3 py-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-300 focus:ring-2 focus:ring-emerald-50 transition-all resize-none" />
+                <button onClick={() => stage(() => parseSheetRoster(paste), "구글 시트 붙여넣기")}
+                  disabled={!paste.trim()}
+                  className={`mt-2 w-full py-2 rounded-xl text-sm font-bold transition-colors ${paste.trim() ? "bg-slate-700 text-white hover:bg-slate-800" : "bg-slate-200 text-slate-400 cursor-not-allowed"}`}>
+                  내용 확인
+                </button>
+              </div>
             </>
           )}
 
           {mode === "restore" && pending && (
             <>
-              <div className="bg-sky-50 border border-sky-100 rounded-xl p-4 space-y-1.5">
+              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 space-y-1.5">
                 <p className="text-xs text-slate-500">출처: <b className="text-slate-700">{pending.source}</b></p>
-                <p className="text-xs text-slate-500">생성: {new Date(pending.backup.exportedAt).toLocaleString("ko-KR")}</p>
+                {pending.backup.skipped > 0 && (
+                  <p className="text-xs text-amber-700">업체·이름이 비어 건너뛴 행 {pending.backup.skipped}개</p>
+                )}
               </div>
               <div className="grid grid-cols-3 gap-2 text-center">
                 {[
@@ -628,11 +650,9 @@ function BackupRestoreModal({ companies, onRestore, onClose }) {
                   </div>
                 ))}
               </div>
-
               <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg p-2.5 leading-relaxed">
                 ✅ <b>추가만</b> 수행합니다. 이미 있는 참여자의 과제·진척도·요약·메모는 전혀 건드리지 않습니다.
               </p>
-
               {pending.diff.newParticipants.length > 0 && (
                 <div className="border border-slate-100 rounded-xl overflow-hidden">
                   <div className="px-4 py-2 bg-slate-50 text-xs font-bold text-slate-500">추가될 참여자</div>
@@ -641,7 +661,7 @@ function BackupRestoreModal({ companies, onRestore, onClose }) {
                       <div key={i} className="px-4 py-2 flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <div className="text-sm font-medium text-slate-700 truncate">{p.name} <span className="text-xs text-slate-400">/ {p.dept}</span></div>
-                          <div className="text-xs text-slate-400 truncate">{p.email}</div>
+                          <div className="text-xs text-slate-400 truncate">{p.email || "이메일 없음"}</div>
                         </div>
                         <span className="text-xs text-slate-500 font-semibold shrink-0">{p.company}</span>
                       </div>
@@ -649,8 +669,7 @@ function BackupRestoreModal({ companies, onRestore, onClose }) {
                   </div>
                 </div>
               )}
-
-              {pending.diff.newParticipants.length === 0 && pending.diff.newCompanies.length === 0 && (
+              {!canApply && (
                 <p className="text-sm text-slate-500 text-center py-4">추가할 항목이 없습니다. 이미 모두 등록되어 있습니다.</p>
               )}
             </>
@@ -665,9 +684,8 @@ function BackupRestoreModal({ companies, onRestore, onClose }) {
           <button onClick={onClose}
             className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">닫기</button>
           {pending && (
-            <button onClick={apply}
-              disabled={busy || (pending.diff.newParticipants.length === 0 && pending.diff.newCompanies.length === 0)}
-              className={`px-5 py-2 text-sm text-white rounded-xl font-semibold transition-colors ${busy || (pending.diff.newParticipants.length === 0 && pending.diff.newCompanies.length === 0) ? "bg-slate-300 cursor-not-allowed" : "bg-emerald-500 hover:bg-emerald-600"}`}>
+            <button onClick={apply} disabled={busy || !canApply}
+              className={`px-5 py-2 text-sm text-white rounded-xl font-semibold transition-colors ${busy || !canApply ? "bg-slate-300 cursor-not-allowed" : "bg-emerald-500 hover:bg-emerald-600"}`}>
               {busy ? "복구 중..." : "♻️ 복구 실행"}
             </button>
           )}
@@ -1122,7 +1140,6 @@ function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAdd
   const [delTarget, setDelTarget] = useState(null);
   const [delParticipantTarget, setDelParticipantTarget] = useState(null);
   const [schedTarget, setSchedTarget] = useState(null);
-  const [isExportingParticipants, setIsExportingParticipants] = useState(false);
   const all = companies.flatMap((c) => c.participants.map((p) => ({ ...p, companyName: c.name, companyId: c.id })));
   const totalAvg = all.length ? Math.round(all.reduce((s, p) => s + avgProgress(p), 0) / all.length) : 0;
 
@@ -1193,20 +1210,15 @@ function InstructorView({ companies, onSelectCompany, onSelectParticipant, onAdd
         <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h2 className="text-sm font-bold text-slate-700">🛰️ 전사 실습 현황 모니터링</h2>
           <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={onOpenBackup} title="참여자 계정 백업 / 복구"
-              className="px-4 py-1.5 bg-sky-500 text-white rounded-xl text-xs font-bold hover:bg-sky-600 transition-colors flex items-center gap-1 shadow-sm">
-              💾 계정 백업·복구
+            {/* 구글 시트 백업과 복구를 한 버튼에 모았다. 예전엔 '참여자 업데이트'가 따로 있어
+                같은 명단을 시트와 로컬 파일 두 곳으로 내보내고 있었다. */}
+            <button onClick={onOpenBackup} title="참여자 백업 / 복구"
+              className="px-4 py-1.5 rounded-xl text-xs font-bold text-white transition-opacity flex items-center gap-1 shadow-sm bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90">
+              👥 참여자 백업·복구
             </button>
             <button onClick={onOpenPassword} title="관리자 비밀번호 변경"
               className="px-4 py-1.5 bg-white text-slate-600 border border-slate-200 rounded-xl text-xs font-bold hover:border-violet-300 hover:text-violet-600 transition-colors flex items-center gap-1">
               🔑 비밀번호 변경
-            </button>
-            <button
-              onClick={() => updateParticipantsToGoogleSheets(companies, setIsExportingParticipants)}
-              disabled={isExportingParticipants}
-              className={`px-4 py-1.5 rounded-xl text-xs font-bold text-white transition-opacity flex items-center gap-1 shadow-sm
-                ${isExportingParticipants ? "bg-slate-400 cursor-not-allowed" : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90"}`}>
-              {isExportingParticipants ? "업데이트 중..." : "👥 참여자 업데이트"}
             </button>
             <button onClick={() => setShowAdd(true)}
               className="px-4 py-1.5 bg-violet-500 text-white rounded-xl text-xs font-bold hover:bg-violet-600 transition-colors flex items-center gap-1">
