@@ -1328,38 +1328,6 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
     setReplyingToId(null);
   };
 
-  /* ─── 우클릭 컨텍스트 메뉴 ─────────────────────── */
-  // { x, y, editKey, replyKey, mid, rid, text, canEdit }
-  const [ctxMenu, setCtxMenu] = useState(null);
-
-  useEffect(() => {
-    if (!ctxMenu) return;
-    const close = () => setCtxMenu(null);
-    const onKey = (e) => { if (e.key === "Escape") close(); };
-    window.addEventListener("click", close);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("click", close);
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [ctxMenu]);
-
-  const openCtxMenu = (e, item) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // 화면 밖으로 나가지 않게 대략 보정
-    const W = 140, H = item.canEdit ? 152 : 84;
-    setCtxMenu({
-      ...item,
-      x: Math.min(e.clientX, window.innerWidth - W - 8),
-      y: Math.min(e.clientY, window.innerHeight - H - 8),
-    });
-  };
-
   // 복사 결과 알림 ("" 이면 표시 안 함)
   const [toast, setToast] = useState("");
   useEffect(() => {
@@ -1386,45 +1354,11 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
     setToast(ok ? "복사되었습니다" : "복사에 실패했습니다");
   };
 
-  const ctxItems = ctxMenu ? [
-    { label: "복사", icon: "📋", show: true, run: () => copyText(ctxMenu.text) },
-    {
-      label: "수정", icon: "✏️", show: ctxMenu.canEdit,
-      run: () => { setEditingId(ctxMenu.editKey); setEditMsg(ctxMenu.text); },
-    },
-    {
-      label: "답장", icon: "↩️", show: true,
-      run: () => { setReplyingToId(ctxMenu.replyKey); setReplyMsg(""); },
-    },
-    {
-      label: "삭제", icon: "🗑", show: ctxMenu.canEdit, danger: true,
-      run: () => ctxMenu.rid
-        ? onDeleteReply(company.id, ctxMenu.mid, ctxMenu.rid)
-        : onDeleteChat(company.id, ctxMenu.mid),
-    },
-  ].filter((it) => it.show) : [];
-
   return (
     <div className="space-y-5">
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-slate-800 text-white text-xs font-semibold shadow-lg">
           {toast}
-        </div>
-      )}
-      {ctxMenu && (
-        <div
-          className="fixed z-50 min-w-[140px] bg-white rounded-xl shadow-lg border border-slate-200 py-1 text-sm"
-          style={{ left: ctxMenu.x, top: ctxMenu.y }}
-          onClick={(e) => e.stopPropagation()}
-          onContextMenu={(e) => e.preventDefault()}>
-          {ctxItems.map((it) => (
-            <button key={it.label}
-              onClick={() => { it.run(); setCtxMenu(null); }}
-              className={`w-full text-left px-3 py-1.5 flex items-center gap-2 font-medium transition-colors
-                ${it.danger ? "text-rose-600 hover:bg-rose-50" : "text-slate-700 hover:bg-slate-50"}`}>
-              <span className="w-4 text-xs">{it.icon}</span>{it.label}
-            </button>
-          ))}
         </div>
       )}
       {showReport && isAdmin && <ReportModal company={company} onClose={() => setShowReport(false)} />}
@@ -1550,18 +1484,15 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
                             <div className={`group relative px-3 py-2 rounded-2xl text-sm leading-relaxed
                           ${m.role === "강사" || m.role === "나"
                                 ? "bg-sky-500 text-white rounded-tr-sm"
-                                : "bg-slate-100 text-slate-700 rounded-tl-sm"}`}
-                              onContextMenu={(e) => openCtxMenu(e, {
-                                editKey: m.id || i, replyKey: m.id || i,
-                                mid: m.id, rid: null, text: m.text, canEdit,
-                              })}>
+                                : "bg-slate-100 text-slate-700 rounded-tl-sm"}`}>
                               {m.text}
 
                               {/* Hover Actions */}
                               <div className={`absolute -top-3 flex gap-1 bg-white/95 backdrop-blur shadow-sm border border-slate-200 rounded-lg px-2 py-1.5 
                               opacity-0 group-hover:opacity-100 transition-opacity z-10
                               ${m.role === "강사" || m.role === "나" ? "right-3" : "left-3"}`}>
-                                <button onClick={() => { setReplyingToId(m.id || i); setReplyMsg(""); }} className="text-[11px] font-bold text-slate-500 hover:text-emerald-500 whitespace-nowrap px-1">답글</button>
+                                <button onClick={() => copyText(m.text)} className="text-[11px] font-bold text-slate-500 hover:text-violet-500 whitespace-nowrap px-1">복사</button>
+                                <button onClick={() => { setReplyingToId(m.id || i); setReplyMsg(""); }} className="text-[11px] font-bold text-slate-500 hover:text-emerald-500 whitespace-nowrap px-1 border-l pl-2 ml-1">답글</button>
                                 {canEdit && (
                                   <>
                                     <button onClick={() => { setEditingId(m.id || i); setEditMsg(m.text); }} className="text-[11px] font-bold text-slate-500 hover:text-sky-500 whitespace-nowrap px-1 border-l pl-2 ml-1">수정</button>
@@ -1619,20 +1550,20 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
                                 ) : (
                                   <div className={`flex items-end gap-1.5 ${r.role === "강사" || r.role === "나" ? "flex-row-reverse" : "flex-row"}`}>
                                     <div className={`group relative px-2.5 py-1.5 rounded-xl text-xs leading-relaxed
-                                  ${r.role === "강사" || r.role === "나" ? "bg-indigo-100 text-indigo-900 rounded-tr-sm" : "bg-slate-100 text-slate-700 rounded-tl-sm"}`}
-                                      onContextMenu={(e) => openCtxMenu(e, {
-                                        editKey: rEditId, replyKey: m.id || i,
-                                        mid: m.id, rid: r.id, text: r.text, canEdit: rCanEdit,
-                                      })}>
+                                  ${r.role === "강사" || r.role === "나" ? "bg-indigo-100 text-indigo-900 rounded-tr-sm" : "bg-slate-100 text-slate-700 rounded-tl-sm"}`}>
                                       {r.text}
-                                      {rCanEdit && (
-                                        <div className={`absolute -top-3 flex gap-1 bg-white/95 backdrop-blur shadow-sm border border-slate-200 rounded-md px-1.5 py-1 
+                                      {/* 복사는 누구나, 수정·삭제는 본인/관리자만 */}
+                                      <div className={`absolute -top-3 flex gap-1 bg-white/95 backdrop-blur shadow-sm border border-slate-200 rounded-md px-1.5 py-1
                                         opacity-0 group-hover:opacity-100 transition-opacity z-10
                                         ${r.role === "강사" || r.role === "나" ? "right-2" : "left-2"}`}>
-                                          <button onClick={() => { setEditingId(rEditId); setEditMsg(r.text); }} className="text-[10px] font-bold text-slate-500 hover:text-sky-500 whitespace-nowrap px-1">수정</button>
-                                          <button onClick={() => onDeleteReply(company.id, m.id, r.id)} className="text-[10px] font-bold text-slate-500 hover:text-rose-500 whitespace-nowrap px-1 border-l pl-1 ml-1">삭제</button>
-                                        </div>
-                                      )}
+                                        <button onClick={() => copyText(r.text)} className="text-[10px] font-bold text-slate-500 hover:text-violet-500 whitespace-nowrap px-1">복사</button>
+                                        {rCanEdit && (
+                                          <>
+                                            <button onClick={() => { setEditingId(rEditId); setEditMsg(r.text); }} className="text-[10px] font-bold text-slate-500 hover:text-sky-500 whitespace-nowrap px-1 border-l pl-1 ml-1">수정</button>
+                                            <button onClick={() => onDeleteReply(company.id, m.id, r.id)} className="text-[10px] font-bold text-slate-500 hover:text-rose-500 whitespace-nowrap px-1 border-l pl-1 ml-1">삭제</button>
+                                          </>
+                                        )}
+                                      </div>
                                     </div>
                                     {rTimeStr && <span className="text-[9px] text-slate-400 shrink-0 mb-0.5">{rTimeStr}</span>}
                                   </div>
