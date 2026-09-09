@@ -1684,9 +1684,20 @@ function PersonalDashboard({ participant, companyName, schedule, isAdmin, isMine
   const [summaryDraft, setSummaryDraft] = useState(participant.summary);
   const [planDraft, setPlanDraft] = useState(participant.nextWeekPlan || "");
   const [memoDraft, setMemoDraft] = useState(participant.instructorMemo);
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [taskNameDraft, setTaskNameDraft] = useState("");
 
   const updateProgress = (tid, val) =>
     onUpdate({ ...participant, tasks: participant.tasks.map((t) => t.id === tid ? { ...t, progress: Number(val) } : t) });
+
+  const startEditTask = (t) => { setEditingTaskId(t.id); setTaskNameDraft(t.name); };
+  const cancelEditTask = () => { setEditingTaskId(null); setTaskNameDraft(""); };
+  const saveTaskName = (tid) => {
+    const name = taskNameDraft.trim();
+    if (!name) return;                       // 빈 이름으로는 저장하지 않는다
+    onUpdate({ ...participant, tasks: participant.tasks.map((t) => t.id === tid ? { ...t, name } : t) });
+    cancelEditTask();
+  };
   const saveSummary = () => { onUpdate({ ...participant, summary: summaryDraft, nextWeekPlan: planDraft }); setEditSummary(false); };
   const saveMemo = () => onUpdate({ ...participant, instructorMemo: memoDraft });
   const saveStatus = (s) => onUpdate({ ...participant, status: s });
@@ -1819,18 +1830,43 @@ function PersonalDashboard({ participant, companyName, schedule, isAdmin, isMine
           <div className="divide-y divide-slate-50">
             {participant.tasks.map((t) => (
               <div key={t.id} className="px-5 py-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold text-slate-700 text-sm">🔗 {t.name}</span>
-                  <div className="flex items-center gap-2">
-                    <DeltaEl d={t.delta} />
-                    <span className="text-sm font-bold text-slate-700 w-8 text-right">{t.progress}%</span>
-                    {isMine && (
-                      <button onClick={() => onDeleteTask(participant.id, t.id)}
-                        className="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-rose-400 hover:bg-rose-50 rounded-lg transition-colors"
-                        title="과제 삭제">×</button>
-                    )}
+                {editingTaskId === t.id ? (
+                  <div className="flex items-center gap-2 mb-2">
+                    <input autoFocus value={taskNameDraft}
+                      onChange={(e) => setTaskNameDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveTaskName(t.id);
+                        if (e.key === "Escape") cancelEditTask();
+                      }}
+                      className="flex-1 min-w-0 px-3 py-1.5 text-sm bg-white border border-violet-300 rounded-lg outline-none focus:ring-2 focus:ring-violet-100" />
+                    <button onClick={() => saveTaskName(t.id)} disabled={!taskNameDraft.trim()}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 transition-colors ${taskNameDraft.trim() ? "bg-violet-500 text-white hover:bg-violet-600" : "bg-slate-200 text-slate-400 cursor-not-allowed"}`}>
+                      저장
+                    </button>
+                    <button onClick={cancelEditTask}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 shrink-0 transition-colors">
+                      취소
+                    </button>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-center justify-between mb-2 gap-2">
+                    <span className="font-semibold text-slate-700 text-sm min-w-0 truncate">🔗 {t.name}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <DeltaEl d={t.delta} />
+                      <span className="text-sm font-bold text-slate-700 w-8 text-right">{t.progress}%</span>
+                      {isMine && (
+                        <>
+                          <button onClick={() => startEditTask(t)}
+                            className="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-violet-500 hover:bg-violet-50 rounded-lg transition-colors"
+                            title="과제명 수정">✏️</button>
+                          <button onClick={() => onDeleteTask(participant.id, t.id)}
+                            className="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-rose-400 hover:bg-rose-50 rounded-lg transition-colors"
+                            title="과제 삭제">×</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <PBar v={t.progress} />
                 {isMine && (
                   <input type="range" min={0} max={100} value={t.progress}
