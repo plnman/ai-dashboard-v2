@@ -169,7 +169,7 @@ const fmtNum = (n) => Number(n || 0).toLocaleString("ko-KR");
 
 const effectLabel = (t) =>
   t?.effectType && t.effectValue > 0
-    ? `효과${t.effectType} ${fmtNum(t.effectValue)}${EFFECT_UNIT[t.effectType]}`
+    ? `효과 ${t.effectType} ${fmtNum(t.effectValue)}${EFFECT_UNIT[t.effectType]}`
     : "";
 
 // 업체 단위 집계. 금액과 시간은 단위가 달라 각각 따로 더한다.
@@ -205,7 +205,7 @@ function TaskMetaFields({ value, onChange, compact }) {
         </select>
       </div>
       <div>
-        <label className={lab}>적용 인원 (명)</label>
+        <label className={lab}>사용자 수 (명)</label>
         <input type="number" min={0} value={value.headcount}
           onChange={(e) => set("headcount", e.target.value)} placeholder="예: 12" className={cls} />
       </div>
@@ -214,7 +214,7 @@ function TaskMetaFields({ value, onChange, compact }) {
         <select value={value.effectType}
           onChange={(e) => set("effectType", e.target.value)} className={cls}>
           <option value="">선택 안 함</option>
-          {EFFECT_TYPES.map((s) => <option key={s} value={s}>효과{s}</option>)}
+          {EFFECT_TYPES.map((s) => <option key={s} value={s}>효과 {s}</option>)}
         </select>
       </div>
       <div>
@@ -236,24 +236,23 @@ function CompanyEffectSummary({ participants }) {
   const t = tallyEffects(participants);
   if (t.total === 0) return null;
 
-  const chips = [];
-  if (t.금액 > 0) chips.push({ text: `💰 ${fmtNum(t.금액)}원`, cls: "bg-emerald-50 text-emerald-700 border-emerald-100" });
-  if (t.시간 > 0) chips.push({ text: `⏱ ${fmtNum(t.시간)}시간`, cls: "bg-amber-50 text-amber-700 border-amber-100" });
-  if (t.headcount > 0) chips.push({ text: `👥 적용 ${fmtNum(t.headcount)}명`, cls: "bg-sky-50 text-sky-700 border-sky-100" });
-
+  // 세 항목은 값이 없어도 계속 보여준다. 무엇을 입력하는 자리인지 드러나야
+  // 하고, 비어 있을 때 사라지면 기능이 있는 줄도 모르게 된다.
+  const items = [
+    { label: "효과 금액", value: `${fmtNum(t.금액)}원`, on: t.금액 > 0 },
+    { label: "효과 시간", value: `${fmtNum(t.시간)}시간`, on: t.시간 > 0 },
+    { label: "총 사용자", value: `${fmtNum(t.headcount)}명`, on: t.headcount > 0 },
+  ];
   const scopeText = TASK_SCOPES.filter((s) => t.byScope[s]).map((s) => `${s} ${t.byScope[s]}`).join(" · ");
 
   return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-      {chips.length > 0 ? (
-        chips.map((c, i) => (
-          <span key={i} className={`px-2 py-0.5 rounded-md text-[11px] font-bold border ${c.cls}`}>{c.text}</span>
-        ))
-      ) : (
-        <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold border bg-slate-50 text-slate-400 border-slate-100">
-          효과 미입력
+    <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+      {items.map((it) => (
+        <span key={it.label} className="text-xs">
+          <span className="text-slate-400">{it.label}</span>{" "}
+          <span className={it.on ? "font-bold text-slate-700" : "text-slate-300"}>{it.value}</span>
         </span>
-      )}
+      ))}
       <span className="text-[11px] text-slate-400">
         과제 {t.total}건 중 {t.withEffect}건 입력{scopeText ? ` · ${scopeText}` : ""}
       </span>
@@ -264,8 +263,8 @@ function CompanyEffectSummary({ participants }) {
 /* 과제 줄 아래에 붙는 요약 칩 */
 function TaskMetaChips({ task }) {
   const chips = [];
-  if (task.scope) chips.push({ text: task.scope, cls: "bg-violet-50 text-violet-600 border-violet-100" });
-  if (task.headcount > 0) chips.push({ text: `${fmtNum(task.headcount)}명`, cls: "bg-sky-50 text-sky-600 border-sky-100" });
+  if (task.scope) chips.push({ text: `사용인력 ${task.scope}`, cls: "bg-violet-50 text-violet-600 border-violet-100" });
+  if (task.headcount > 0) chips.push({ text: `사용자 ${fmtNum(task.headcount)}명`, cls: "bg-sky-50 text-sky-600 border-sky-100" });
   const eff = effectLabel(task);
   if (eff) chips.push({ text: eff, cls: "bg-emerald-50 text-emerald-700 border-emerald-100" });
   if (!chips.length) return null;
@@ -1229,20 +1228,18 @@ async function publishReportToGoogleSheets(companies, targetWeek, setExporting, 
         summaryText += `  - 등록된 참여자가 없습니다.\n`;
       } else {
         // 효과 집계. 금액과 시간은 단위가 달라 각각 따로 더한다.
+        // 허브 헤더와 같은 함수·같은 용어를 쓴다. 두 숫자가 어긋나면 안 된다.
         const tally = tallyEffects(company.participants);
-        const effParts = [];
-        if (tally.금액 > 0) effParts.push(`금액 ${fmtNum(tally.금액)}원`);
-        if (tally.시간 > 0) effParts.push(`시간 ${fmtNum(tally.시간)}시간`);
-        summaryText += `  ▸ 효과 집계: ${effParts.length ? effParts.join(" · ") : "입력된 효과 없음"}`;
-        summaryText += ` (전체 ${tally.total}건 중 ${tally.withEffect}건 입력)\n`;
+        summaryText += `  ▸ 효과 금액: ${fmtNum(tally.금액)}원\n`;
+        summaryText += `  ▸ 효과 시간: ${fmtNum(tally.시간)}시간\n`;
+        summaryText += `  ▸ 총 사용자: ${fmtNum(tally.headcount)}명`;
+        summaryText += `  (과제 ${tally.total}건 중 ${tally.withEffect}건 효과 입력)\n`;
 
         const scopeParts = TASK_SCOPES
           .filter((s) => tally.byScope[s])
-          .map((s) => `${s} ${tally.byScope[s]}`);
-        if (scopeParts.length || tally.headcount > 0) {
-          summaryText += `  ▸ 적용 범위: ${scopeParts.length ? scopeParts.join(" · ") : "미입력"}`;
-          if (tally.headcount > 0) summaryText += ` / 적용 인원 합 ${fmtNum(tally.headcount)}명`;
-          summaryText += `\n`;
+          .map((s) => `${s} ${tally.byScope[s]}건`);
+        if (scopeParts.length) {
+          summaryText += `  ▸ 사용인력: ${scopeParts.join(" · ")}\n`;
         }
         summaryText += `\n`;
 
@@ -1251,8 +1248,8 @@ async function publishReportToGoogleSheets(companies, targetWeek, setExporting, 
           // 과제별 범위·인원·효과를 한 줄씩
           (p.tasks || []).forEach((t) => {
             const bits = [];
-            if (t.scope) bits.push(t.scope);
-            if (t.headcount > 0) bits.push(`${fmtNum(t.headcount)}명`);
+            if (t.scope) bits.push(`사용인력 ${t.scope}`);
+            if (t.headcount > 0) bits.push(`사용자 ${fmtNum(t.headcount)}명`);
             const eff = effectLabel(t);
             if (eff) bits.push(eff);
             summaryText += `        · ${t.name} (${t.progress}%)${bits.length ? ` — ${bits.join(" / ")}` : ""}\n`;
