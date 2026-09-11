@@ -147,6 +147,106 @@ const avgProgress = (p) =>
 
 const pColor = (v) => v >= 70 ? "bg-emerald-400" : v >= 40 ? "bg-amber-400" : "bg-rose-400";
 
+/* ─── 과제 부가 정보 ──────────────────────────────
+   효과는 금액 / 시간 중 하나만 고른다. 둘 다 받으면 같은 절감을 두 번 세게 되어
+   업체 합계가 부풀기 때문이다. 효과%는 분모가 과제마다 달라 합산도 평균도
+   불가능해서 아예 넣지 않았다. */
+const TASK_SCOPES = ["경영진", "관련부서", "부서원", "본인", "전사"];
+const EFFECT_TYPES = ["금액", "시간"];
+const EFFECT_UNIT = { 금액: "원", 시간: "시간" };
+
+const emptyTaskMeta = () => ({ scope: "", headcount: "", effectType: "", effectValue: "" });
+
+// 저장 직전 정규화. 숫자는 숫자로, 미입력은 빈 문자열/0 으로 통일한다.
+const normalizeTaskMeta = (m) => ({
+  scope: m.scope || "",
+  headcount: Number(m.headcount) > 0 ? Number(m.headcount) : 0,
+  effectType: m.effectType || "",
+  effectValue: m.effectType && Number(m.effectValue) > 0 ? Number(m.effectValue) : 0,
+});
+
+const fmtNum = (n) => Number(n || 0).toLocaleString("ko-KR");
+
+const effectLabel = (t) =>
+  t?.effectType && t.effectValue > 0
+    ? `효과${t.effectType} ${fmtNum(t.effectValue)}${EFFECT_UNIT[t.effectType]}`
+    : "";
+
+// 업체 단위 집계. 금액과 시간은 단위가 달라 각각 따로 더한다.
+const tallyEffects = (participants) => {
+  const t = { 금액: 0, 시간: 0, headcount: 0, byScope: {}, withEffect: 0, total: 0 };
+  (participants || []).forEach((p) => {
+    (p.tasks || []).forEach((task) => {
+      t.total++;
+      if (task.scope) t.byScope[task.scope] = (t.byScope[task.scope] || 0) + 1;
+      if (task.headcount > 0) t.headcount += task.headcount;
+      if (task.effectType && task.effectValue > 0) {
+        t[task.effectType] += task.effectValue;
+        t.withEffect++;
+      }
+    });
+  });
+  return t;
+};
+
+/* 과제의 범위·인원·효과 입력 필드. 추가 모달과 인라인 수정에서 같이 쓴다. */
+function TaskMetaFields({ value, onChange, compact }) {
+  const set = (k, v) => onChange({ ...value, [k]: v });
+  const cls = `w-full px-3 ${compact ? "py-1.5 text-xs" : "py-2 text-sm"} bg-white border border-slate-200 rounded-lg outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-50 transition-all`;
+  const lab = "block text-[11px] font-bold text-slate-500 mb-1";
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <div>
+        <label className={lab}>사용인력</label>
+        <select value={value.scope} onChange={(e) => set("scope", e.target.value)} className={cls}>
+          <option value="">선택 안 함</option>
+          {TASK_SCOPES.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className={lab}>적용 인원 (명)</label>
+        <input type="number" min={0} value={value.headcount}
+          onChange={(e) => set("headcount", e.target.value)} placeholder="예: 12" className={cls} />
+      </div>
+      <div>
+        <label className={lab}>효과 유형</label>
+        <select value={value.effectType}
+          onChange={(e) => set("effectType", e.target.value)} className={cls}>
+          <option value="">선택 안 함</option>
+          {EFFECT_TYPES.map((s) => <option key={s} value={s}>효과{s}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className={lab}>
+          효과 값 {value.effectType ? `(${EFFECT_UNIT[value.effectType]})` : ""}
+        </label>
+        <input type="number" min={0} value={value.effectValue} disabled={!value.effectType}
+          onChange={(e) => set("effectValue", e.target.value)}
+          placeholder={value.effectType === "시간" ? "예: 40" : "예: 12000000"}
+          className={`${cls} ${!value.effectType ? "bg-slate-50 text-slate-300 cursor-not-allowed" : ""}`} />
+      </div>
+    </div>
+  );
+}
+
+/* 과제 줄 아래에 붙는 요약 칩 */
+function TaskMetaChips({ task }) {
+  const chips = [];
+  if (task.scope) chips.push({ text: task.scope, cls: "bg-violet-50 text-violet-600 border-violet-100" });
+  if (task.headcount > 0) chips.push({ text: `${fmtNum(task.headcount)}명`, cls: "bg-sky-50 text-sky-600 border-sky-100" });
+  const eff = effectLabel(task);
+  if (eff) chips.push({ text: eff, cls: "bg-emerald-50 text-emerald-700 border-emerald-100" });
+  if (!chips.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1 mb-2">
+      {chips.map((c, i) => (
+        <span key={i} className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border ${c.cls}`}>{c.text}</span>
+      ))}
+    </div>
+  );
+}
+
 const sBadge = (s) =>
   s === "정상"
     ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
@@ -266,10 +366,11 @@ function DeleteParticipantModal({ participant, onConfirm, onClose }) {
 /* ─── 과제 추가 모달 ─────────────────────────────── */
 function AddTaskModal({ onAdd, onClose }) {
   const [name, setName] = useState("");
-  const handle = () => { if (!name.trim()) return; onAdd(name.trim()); onClose(); };
+  const [meta, setMeta] = useState(emptyTaskMeta);
+  const handle = () => { if (!name.trim()) return; onAdd(name.trim(), normalizeTaskMeta(meta)); onClose(); };
   return (
     <Overlay onClose={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
         <div className="flex items-center gap-3 mb-5">
           <div className="w-9 h-9 bg-emerald-100 rounded-xl flex items-center justify-center text-lg">🛠️</div>
           <h3 className="text-base font-bold text-slate-800">과제 추가</h3>
@@ -277,7 +378,11 @@ function AddTaskModal({ onAdd, onClose }) {
         <label className="text-xs text-slate-500 font-semibold mb-1.5 block">과제명</label>
         <input autoFocus value={name} onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handle()} placeholder="예: 데이터 전처리 파이프라인"
-          className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl mb-5 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all" />
+          className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl mb-4 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all" />
+        <TaskMetaFields value={meta} onChange={setMeta} />
+        <p className="text-[11px] text-slate-400 mt-2 mb-5 leading-relaxed">
+          나중에 ✏️ 로 언제든 바꿀 수 있습니다. 효과는 금액·시간 중 하나만 고릅니다.
+        </p>
         <div className="flex gap-2 justify-end">
           <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">취소</button>
           <button onClick={handle} className="px-5 py-2 text-sm text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 transition-colors font-semibold">추가</button>
@@ -1092,8 +1197,35 @@ async function publishReportToGoogleSheets(companies, targetWeek, setExporting, 
       if (company.participants.length === 0) {
         summaryText += `  - 등록된 참여자가 없습니다.\n`;
       } else {
+        // 효과 집계. 금액과 시간은 단위가 달라 각각 따로 더한다.
+        const tally = tallyEffects(company.participants);
+        const effParts = [];
+        if (tally.금액 > 0) effParts.push(`금액 ${fmtNum(tally.금액)}원`);
+        if (tally.시간 > 0) effParts.push(`시간 ${fmtNum(tally.시간)}시간`);
+        summaryText += `  ▸ 효과 집계: ${effParts.length ? effParts.join(" · ") : "입력된 효과 없음"}`;
+        summaryText += ` (전체 ${tally.total}건 중 ${tally.withEffect}건 입력)\n`;
+
+        const scopeParts = TASK_SCOPES
+          .filter((s) => tally.byScope[s])
+          .map((s) => `${s} ${tally.byScope[s]}`);
+        if (scopeParts.length || tally.headcount > 0) {
+          summaryText += `  ▸ 적용 범위: ${scopeParts.length ? scopeParts.join(" · ") : "미입력"}`;
+          if (tally.headcount > 0) summaryText += ` / 적용 인원 합 ${fmtNum(tally.headcount)}명`;
+          summaryText += `\n`;
+        }
+        summaryText += `\n`;
+
         company.participants.forEach(p => {
           summaryText += `       - [${p.name}/${p.dept}] 진도율: ${avgProgress(p)}% (${p.status})\n`;
+          // 과제별 범위·인원·효과를 한 줄씩
+          (p.tasks || []).forEach((t) => {
+            const bits = [];
+            if (t.scope) bits.push(t.scope);
+            if (t.headcount > 0) bits.push(`${fmtNum(t.headcount)}명`);
+            const eff = effectLabel(t);
+            if (eff) bits.push(eff);
+            summaryText += `        · ${t.name} (${t.progress}%)${bits.length ? ` — ${bits.join(" / ")}` : ""}\n`;
+          });
           if (p.summary) {
             p.summary.split('\n').forEach((line, idx) => {
               if (line.trim() !== "") {
@@ -1690,12 +1822,27 @@ function PersonalDashboard({ participant, companyName, schedule, isAdmin, isMine
   const updateProgress = (tid, val) =>
     onUpdate({ ...participant, tasks: participant.tasks.map((t) => t.id === tid ? { ...t, progress: Number(val) } : t) });
 
-  const startEditTask = (t) => { setEditingTaskId(t.id); setTaskNameDraft(t.name); };
-  const cancelEditTask = () => { setEditingTaskId(null); setTaskNameDraft(""); };
+  const [taskMetaDraft, setTaskMetaDraft] = useState(emptyTaskMeta);
+
+  const startEditTask = (t) => {
+    setEditingTaskId(t.id);
+    setTaskNameDraft(t.name);
+    setTaskMetaDraft({
+      scope: t.scope || "",
+      headcount: t.headcount || "",
+      effectType: t.effectType || "",
+      effectValue: t.effectValue || "",
+    });
+  };
+  const cancelEditTask = () => { setEditingTaskId(null); setTaskNameDraft(""); setTaskMetaDraft(emptyTaskMeta()); };
   const saveTaskName = (tid) => {
     const name = taskNameDraft.trim();
     if (!name) return;                       // 빈 이름으로는 저장하지 않는다
-    onUpdate({ ...participant, tasks: participant.tasks.map((t) => t.id === tid ? { ...t, name } : t) });
+    const meta = normalizeTaskMeta(taskMetaDraft);
+    onUpdate({
+      ...participant,
+      tasks: participant.tasks.map((t) => t.id === tid ? { ...t, name, ...meta } : t),
+    });
     cancelEditTask();
   };
   const saveSummary = () => { onUpdate({ ...participant, summary: summaryDraft, nextWeekPlan: planDraft }); setEditSummary(false); };
@@ -1731,7 +1878,7 @@ function PersonalDashboard({ participant, companyName, schedule, isAdmin, isMine
   return (
     <div className="space-y-4">
       {showAddTask && (
-        <AddTaskModal onAdd={(name) => onAddTask(participant.id, name)} onClose={() => setShowAddTask(false)} />
+        <AddTaskModal onAdd={(name, meta) => onAddTask(participant.id, name, meta)} onClose={() => setShowAddTask(false)} />
       )}
 
       {/* 헤더 카드 */}
@@ -1831,22 +1978,28 @@ function PersonalDashboard({ participant, companyName, schedule, isAdmin, isMine
             {participant.tasks.map((t) => (
               <div key={t.id} className="px-5 py-4">
                 {editingTaskId === t.id ? (
-                  <div className="flex items-center gap-2 mb-2">
-                    <input autoFocus value={taskNameDraft}
-                      onChange={(e) => setTaskNameDraft(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") saveTaskName(t.id);
-                        if (e.key === "Escape") cancelEditTask();
-                      }}
-                      className="flex-1 min-w-0 px-3 py-1.5 text-sm bg-white border border-violet-300 rounded-lg outline-none focus:ring-2 focus:ring-violet-100" />
-                    <button onClick={() => saveTaskName(t.id)} disabled={!taskNameDraft.trim()}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 transition-colors ${taskNameDraft.trim() ? "bg-violet-500 text-white hover:bg-violet-600" : "bg-slate-200 text-slate-400 cursor-not-allowed"}`}>
-                      저장
-                    </button>
-                    <button onClick={cancelEditTask}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 shrink-0 transition-colors">
-                      취소
-                    </button>
+                  <div className="mb-2 bg-violet-50/40 border border-violet-100 rounded-xl p-3 space-y-2">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-500 mb-1">과제명</label>
+                      <input autoFocus value={taskNameDraft}
+                        onChange={(e) => setTaskNameDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveTaskName(t.id);
+                          if (e.key === "Escape") cancelEditTask();
+                        }}
+                        className="w-full px-3 py-1.5 text-sm bg-white border border-violet-300 rounded-lg outline-none focus:ring-2 focus:ring-violet-100" />
+                    </div>
+                    <TaskMetaFields value={taskMetaDraft} onChange={setTaskMetaDraft} compact />
+                    <div className="flex gap-2 justify-end pt-1">
+                      <button onClick={cancelEditTask}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors">
+                        취소
+                      </button>
+                      <button onClick={() => saveTaskName(t.id)} disabled={!taskNameDraft.trim()}
+                        className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${taskNameDraft.trim() ? "bg-violet-500 text-white hover:bg-violet-600" : "bg-slate-200 text-slate-400 cursor-not-allowed"}`}>
+                        저장
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between mb-2 gap-2">
@@ -1867,6 +2020,7 @@ function PersonalDashboard({ participant, companyName, schedule, isAdmin, isMine
                     </div>
                   </div>
                 )}
+                {editingTaskId !== t.id && <TaskMetaChips task={t} />}
                 <PBar v={t.progress} />
                 {isMine && (
                   <input type="range" min={0} max={100} value={t.progress}
@@ -2151,11 +2305,12 @@ export default function App() {
       ...c, participants: c.participants.map((p) => p.id === updated.id ? updated : p),
     })));
 
-  const addTask = (pid, name) => {
+  const addTask = (pid, name, meta) => {
     const tid = uid();
+    const extra = meta || normalizeTaskMeta(emptyTaskMeta());
     return updateCompanies((prev) => prev.map((c) => ({
       ...c, participants: c.participants.map((p) =>
-        p.id === pid ? { ...p, tasks: [...p.tasks, { id: tid, name, progress: 0, delta: 0 }] } : p),
+        p.id === pid ? { ...p, tasks: [...p.tasks, { id: tid, name, progress: 0, delta: 0, ...extra }] } : p),
     })));
   };
 
