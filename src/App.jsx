@@ -230,6 +230,37 @@ function TaskMetaFields({ value, onChange, compact }) {
   );
 }
 
+/* 업체 허브 헤더에 붙는 효과 집계 줄.
+   리포트의 '▸ 효과 집계' / '▸ 적용 범위' 와 같은 숫자를 같은 규칙으로 계산한다. */
+function CompanyEffectSummary({ participants }) {
+  const t = tallyEffects(participants);
+  if (t.total === 0) return null;
+
+  const chips = [];
+  if (t.금액 > 0) chips.push({ text: `💰 ${fmtNum(t.금액)}원`, cls: "bg-emerald-50 text-emerald-700 border-emerald-100" });
+  if (t.시간 > 0) chips.push({ text: `⏱ ${fmtNum(t.시간)}시간`, cls: "bg-amber-50 text-amber-700 border-amber-100" });
+  if (t.headcount > 0) chips.push({ text: `👥 적용 ${fmtNum(t.headcount)}명`, cls: "bg-sky-50 text-sky-700 border-sky-100" });
+
+  const scopeText = TASK_SCOPES.filter((s) => t.byScope[s]).map((s) => `${s} ${t.byScope[s]}`).join(" · ");
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      {chips.length > 0 ? (
+        chips.map((c, i) => (
+          <span key={i} className={`px-2 py-0.5 rounded-md text-[11px] font-bold border ${c.cls}`}>{c.text}</span>
+        ))
+      ) : (
+        <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold border bg-slate-50 text-slate-400 border-slate-100">
+          효과 미입력
+        </span>
+      )}
+      <span className="text-[11px] text-slate-400">
+        과제 {t.total}건 중 {t.withEffect}건 입력{scopeText ? ` · ${scopeText}` : ""}
+      </span>
+    </div>
+  );
+}
+
 /* 과제 줄 아래에 붙는 요약 칩 */
 function TaskMetaChips({ task }) {
   const chips = [];
@@ -1588,6 +1619,8 @@ function CompanyHub({ company, isAdmin, onSelectParticipant, onAddParticipant, o
           <div>
             <h2 className="text-base font-bold text-slate-800">{company.name}</h2>
             <p className="text-xs text-slate-400">실습 메인 허브 · 참여자 {company.participants.length}명</p>
+            {/* 리포트에 나가는 효과 집계와 같은 숫자를 허브에서도 바로 보이게 한다 */}
+            <CompanyEffectSummary participants={company.participants} />
           </div>
         </div>
         {/* 레포트 발행 버튼 — 관리자에게만 표시 */}
